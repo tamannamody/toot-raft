@@ -10,7 +10,7 @@ Open `index.html` in any browser (Safari, Chrome, phone). No install, no server.
 
 - **1 2 3 4** or tap a pig: that pig toots and pushes the raft away from its side
 - **Same pig 3 times fast:** ROCKET TOOT
-- **Space:** auto-toot the best-aimed pig
+- **Arrow keys / WASD, or tap the water:** push the raft that way (the best-aimed pig toots)
 - **P / Esc:** pause
 
 ## Modes
