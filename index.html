@@ -1627,7 +1627,96 @@ function drawQuips() {
   }
 }
 
+// Houses sit on their own grid along each bank; trees and rocks keep clear of them.
+const HOUSE_B = 300;
+const ROOFS = [['#e8665a', '#c94d43'], ['#5a8fe8', '#4373c9'], ['#f0a04b', '#d0842f'], ['#9b7be0', '#7e5fc4'], ['#4fb39a', '#3a947d']];
+function houseAt(T, k, side) {
+  const h = hash(k * 5.3 + side * 29 + T.def.seed * 1.7);
+  if (h > 0.5) return null;
+  const d = k * HOUSE_B + 60 + hash(h * 41) * (HOUSE_B - 120);
+  if (d < 120 || d > T.L - 40) return null;
+  const f = T.frame(d);
+  const w = 76 + hash(h * 17) * 26, dp = 56 + hash(h * 23) * 12;
+  const dist = f.hw + 95 + dp / 2 + hash(h * 59) * 70;
+  return { d, f, side, w, dp, dist, h,
+    x: f.cx + side * dist * f.nx, y: -d + side * dist * f.ny, r: Math.hypot(w, dp) / 2 + 12 };
+}
+function housesNear(T, d, side) {
+  const k0 = Math.floor(d / HOUSE_B), out = [];
+  for (let k = k0 - 1; k <= k0 + 1; k++) { const o = houseAt(T, k, side); if (o) out.push(o); }
+  return out;
+}
+// true if a tree or rock at (x, y) would sit on the house or its path to the water
+function houseBlocks(o, x, y, rad) {
+  if (Math.hypot(o.x - x, o.y - y) < o.r + rad) return true;
+  const ang = Math.atan2(o.side * o.f.ny, o.side * o.f.nx), ca = Math.cos(ang), sa = Math.sin(ang);
+  const lx = (x - o.x) * ca + (y - o.y) * sa, ly = -(x - o.x) * sa + (y - o.y) * ca;
+  return Math.abs(ly) < rad + 10 && lx < 0 && lx > -(o.dist - o.f.hw) - rad;
+}
+function drawHouse(o) {
+  const { f, side, w, dp, dist, h } = o;
+  const ang = Math.atan2(side * f.ny, side * f.nx);
+  const [roof, roofDark] = ROOFS[Math.floor(hash(h * 71) * ROOFS.length)];
+  const flowers = hash(h * 83) < 0.6;
+  // local frame: +x points away from the river, y runs along it
+  ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(ang);
+  // dirt path down to the bank
+  const pathEnd = -(dist - f.hw - 34);
+  ctx.fillStyle = '#e2c18a';
+  ctx.beginPath(); ctx.roundRect(pathEnd, -7, -dp / 2 - pathEnd + 4, 14, 6); ctx.fill();
+  // flower bed beside the house
+  if (flowers) {
+    const fy = (hash(h * 89) < 0.5 ? -1 : 1) * (w / 2 + 16);
+    ctx.fillStyle = '#4c9a43';
+    ctx.beginPath(); ctx.roundRect(-dp / 2 + 4, fy - 9, dp - 8, 18, 9); ctx.fill();
+    const cols = ['#ff7eb6', '#ffd84d', '#ffffff', '#ff9a52'];
+    for (let i = 0; i < 5; i++) {
+      circle(-dp / 2 + 10 + i * (dp - 20) / 4, fy + (i % 2 ? 3 : -3), 3.2);
+      ctx.fillStyle = cols[Math.floor(hash(h * 97 + i) * cols.length)]; ctx.fill();
+    }
+  }
+  ctx.restore();
+  // shadow
+  ctx.save(); ctx.translate(o.x + 7, o.y + 9); ctx.rotate(ang);
+  ctx.fillStyle = 'rgba(0,0,0,.15)';
+  ctx.beginPath(); ctx.roundRect(-dp / 2, -w / 2, dp, w, 4); ctx.fill();
+  ctx.restore();
+  // roof: ridge runs along the river, river-facing half catches the light
+  ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(ang);
+  ctx.fillStyle = roofDark;
+  ctx.beginPath(); ctx.roundRect(-dp / 2, -w / 2, dp, w, 4); ctx.fill();
+  ctx.fillStyle = roof;
+  ctx.beginPath(); ctx.roundRect(-dp / 2, -w / 2, dp / 2, w, [4, 0, 0, 4]); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.12)'; ctx.lineWidth = 2;
+  for (let i = 1; i < 4; i++) {
+    const lx = -dp / 2 + i * dp / 8;
+    ctx.beginPath(); ctx.moveTo(lx, -w / 2 + 3); ctx.lineTo(lx, w / 2 - 3); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, -w / 2 + 2); ctx.lineTo(0, w / 2 - 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(-dp / 2, -w / 2, dp, w, 4); ctx.stroke();
+  // chimney
+  const cy = (hash(h * 61) < 0.5 ? -1 : 1) * w * 0.25;
+  ctx.fillStyle = '#9a6a52'; ctx.fillRect(dp * 0.12, cy - 6, 12, 12);
+  ctx.fillStyle = '#5d3d2e'; ctx.fillRect(dp * 0.12 + 3, cy - 3, 6, 6);
+  ctx.restore();
+  // smoke drifts up the screen whatever way the house faces
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const sx = o.x + (dp * 0.12 + 6) * ca - cy * sa, sy = o.y + (dp * 0.12 + 6) * sa + cy * ca;
+  for (let i = 0; i < 3; i++) {
+    const p = (G.time * 0.45 + i / 3 + h) % 1;
+    ctx.globalAlpha = (1 - p) * 0.55;
+    circle(sx + Math.sin(p * 5 + h * 9) * 6 + p * 10, sy - p * 34, 4 + p * 7);
+    ctx.fillStyle = '#eef1f4'; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawTrees(T, dLo, dHi) {
+  const HB = HOUSE_B;
+  for (let k = Math.floor(dLo / HB) - 1; k <= Math.ceil(dHi / HB) + 1; k++)
+    for (const side of [-1, 1]) { const o = houseAt(T, k, side); if (o) drawHouse(o); }
   const B = 120;
   for (let k = Math.floor(dLo / B); k <= Math.ceil(dHi / B); k++) {
     for (const side of [-1, 1]) {
@@ -1638,6 +1727,7 @@ function drawTrees(T, dLo, dHi) {
       const rad = 20 + hash(h1 * 7) * 22;
       const u = side * (f.hw + 52 + rad + hash(h1 * 13) * 180);
       const x = f.cx + u * f.nx, y = -d + u * f.ny;
+      if (housesNear(T, d, side).some(o => houseBlocks(o, x, y, rad))) continue;
       if (hash(h1 * 53) < 0.25) {
         // rock
         ellipse(x + 3, y + 4, rad * 0.6, rad * 0.45); ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fill();
