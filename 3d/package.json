@@ -1,0 +1,7 @@
+{
+  "name": "toot-raft-3d",
+  "private": true,
+  "description": "3D build of Toot Raft. Run: npm install, then npm run build. Output: index.html",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": { "esbuild": "^0.25.0", "three": "^0.170.0" }
+}

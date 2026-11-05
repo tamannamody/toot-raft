@@ -34,3 +34,11 @@ The box gets three files:
 - `thumbnail.png`: the 800 by 500 cover, copy from this repo
 
 Never touch another maker's folder, never run `tools/build.py`, commit only `games/tamannamody/`, pull with rebase before pushing.
+
+## 3D version
+
+`3d/index.html` is the 3D build: one file, no install, no outside scripts, and no YouTube clips (the built-in toots play). It has a chase camera and a water slide in the sky, with the same rules, rivers, daily river, wardrobe and saved progress as the 2D game.
+
+To change it, edit `3d/src/`, then run `npm install` and `npm run build` inside `3d/`. `3d/index.html` is written by that build, so do not edit it by hand.
+
+To publish it, copy `3d/index.html` and `3d/thumbnail.png` into the box, along with `game.json`.

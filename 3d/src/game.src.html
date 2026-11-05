@@ -1,0 +1,1292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#7fcdf5">
+<title>Toot Raft</title>
+<style>
+  :root {
+    --ink: #1f2a44;
+    --panel: #fffaf0;
+    --accent: #ff6b5a;
+    --accent-dark: #d94a3a;
+    --good: #5fd158;
+    --water: #3cc3f2;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #cfeefb;
+    font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink); -webkit-user-select: none; user-select: none; touch-action: none;
+    overscroll-behavior: none;
+  }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+  .hidden { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; left: 0; right: 0; top: 0; pointer-events: none;
+    padding: calc(env(safe-area-inset-top) + 10px) 16px 0; }
+  .hud-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .chip { background: rgba(255,250,240,.92); border-radius: 14px; padding: 6px 12px;
+    box-shadow: 0 3px 0 rgba(31,42,68,.18); font-weight: 800; white-space: nowrap; }
+  .hud-left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  #hearts { color: var(--accent); font-size: 18px; letter-spacing: 2px; }
+  #hearts .lost { color: rgba(31,42,68,.2); }
+  #beans { font-size: 15px; }
+  .hud-mid { text-align: center; }
+  #lvlname { font-size: 12px; font-weight: 800; opacity: .75; text-transform: uppercase; letter-spacing: .08em; }
+  #timer { font-size: 22px; font-variant-numeric: tabular-nums; }
+  .hud-right { display: flex; gap: 8px; pointer-events: auto; }
+  .icon { width: 42px; height: 42px; border: 0; border-radius: 14px; background: rgba(255,250,240,.92);
+    box-shadow: 0 3px 0 rgba(31,42,68,.18); display: grid; place-items: center; padding: 0; }
+  .icon svg { width: 20px; height: 20px; }
+  .icon:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(31,42,68,.18); }
+  #progress { position: relative; margin: 10px auto 0; height: 10px; max-width: 360px;
+    background: rgba(31,42,68,.18); border-radius: 6px; }
+  #progFill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 6px; background: var(--good); }
+  #progRaft { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; left: 0;
+    border-radius: 50%; background: #fff4e6; border: 4px solid var(--accent); }
+  #progress::after { content: ""; position: absolute; right: -4px; top: -5px; width: 10px; height: 20px;
+    background: repeating-linear-gradient(0deg, #1f2a44 0 5px, #fff 5px 10px); border-radius: 2px; }
+
+  #hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 108px);
+    background: rgba(31,42,68,.85); color: #fff; padding: 10px 16px; border-radius: 14px; font-weight: 700;
+    font-size: 15px; text-align: center; width: max-content; max-width: calc(100% - 32px); pointer-events: none;
+    transition: opacity .4s; }
+
+  #flash { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); text-align: center;
+    font-size: clamp(22px, 7vw, 40px); font-weight: 900; color: #fff; letter-spacing: .01em; pointer-events: none;
+    -webkit-text-stroke: 6px #1f2a44; paint-order: stroke fill; }
+  #bubble { position: fixed; left: 0; top: 0; pointer-events: none; background: #fff; color: #1f2a44; width: max-content; max-width: 220px;
+    border: 3px solid #1f2a44; border-left: 8px solid var(--c, #1f2a44); padding: 6px 10px; font: 800 14px ui-monospace, Menlo, monospace; will-change: transform; }
+
+  /* ---------- Rider pad ---------- */
+  #pad { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 12px);
+    width: min(560px, calc(100% - 32px)); display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rider { position: relative; height: 78px; border: 0; border-radius: 18px; padding: 6px 4px 8px;
+    background: var(--c); box-shadow: 0 5px 0 var(--cd); display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between; color: #1f2a44; font-weight: 800; }
+  .rider:active, .rider.pressed { transform: translateY(4px); box-shadow: 0 1px 0 var(--cd); }
+  .rider.empty { filter: saturate(.35) brightness(.95); }
+  .rider .top { display: flex; align-items: center; gap: 6px; }
+  .rider .num { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.75);
+    display: grid; place-items: center; font-size: 13px; }
+  .rider .arrow { width: 26px; height: 26px; display: grid; place-items: center; }
+  .rider .arrow svg { width: 26px; height: 26px; }
+  .rider .nm { font-size: 13px; }
+  .rider .gas { display: flex; gap: 3px; width: 70%; }
+  .rider .gas i { flex: 1; height: 6px; border-radius: 3px; background: rgba(31,42,68,.18); overflow: hidden; position: relative; }
+  .rider .gas i b { position: absolute; inset: 0; width: 0; background: #b5f23b; border-radius: 3px; }
+
+  /* ---------- Screens ---------- */
+  .screen { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+    background: rgba(31,42,68,.16); overflow-y: auto; touch-action: pan-y; }
+  .card { width: min(460px, 100%); background: var(--panel); border-radius: 26px; padding: 24px 22px;
+    box-shadow: 0 10px 0 rgba(31,42,68,.25); text-align: center; margin: auto; }
+  h1 { margin: 0; font-size: 46px; line-height: 1; letter-spacing: -.02em; color: var(--accent); text-shadow: 0 4px 0 #ffd2a8; }
+  h2 { margin: 0 0 6px; font-size: 30px; }
+  .tag { margin: 8px 0 16px; font-weight: 700; opacity: .7; }
+  .how { text-align: left; margin: 0 0 14px; padding: 12px 14px; background: #fff; border-radius: 16px; font-size: 14px; line-height: 1.45; }
+  .how p { margin: 0 0 6px; }
+  .how p:last-child { margin: 0; }
+  .how b { color: var(--accent-dark); }
+  .keys { font-size: 12.5px; opacity: .75; margin: 0 0 14px; line-height: 1.5; }
+  kbd { font: inherit; font-weight: 800; background: #fff; border-radius: 6px; padding: 0 5px; box-shadow: 0 2px 0 rgba(31,42,68,.2); }
+  .btn { display: block; width: 100%; border: 0; border-radius: 16px; padding: 14px; font-size: 19px; font-weight: 900;
+    background: var(--accent); color: #fff; box-shadow: 0 5px 0 var(--accent-dark); margin-top: 10px; }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-dark); }
+  .btn.alt { background: #fff; color: var(--ink); box-shadow: 0 5px 0 rgba(31,42,68,.2); }
+  .row { display: flex; gap: 10px; }
+  .row .btn { flex: 1; }
+  .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+  .lvl { border: 0; border-radius: 14px; padding: 10px 4px; background: #fff; box-shadow: 0 4px 0 rgba(31,42,68,.18);
+    font-size: 12px; font-weight: 700; line-height: 1.3; }
+  .lvl b { display: block; font-size: 14px; }
+  .lvl:disabled { opacity: .45; cursor: default; }
+  .stats { background: #fff; border-radius: 16px; padding: 10px 14px; margin: 12px 0 4px; text-align: left; font-size: 15px; }
+  .stats div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .stats div + div { border-top: 1px dashed rgba(31,42,68,.15); }
+  .stats .total { font-weight: 900; font-size: 18px; }
+  .stars { font-size: 34px; color: #ffb703; letter-spacing: 4px; margin: 4px 0; }
+  .stars .off { color: rgba(31,42,68,.15); }
+  .btn small { display: block; font-size: 12px; font-weight: 700; opacity: .7; }
+  .pigs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 4px; }
+  .pig { border: 0; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 4px 0 rgba(31,42,68,.18);
+    font-weight: 800; font-size: 13px; }
+  .pig.on { background: var(--c); box-shadow: 0 4px 0 var(--cd); }
+  .pig canvas { display: block; margin: 0 auto 4px; }
+  .wlabel { text-align: left; font-weight: 900; margin: 14px 0 6px; font-size: 14px; }
+  .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .opt { border: 0; border-radius: 12px; padding: 8px 4px; background: #fff; box-shadow: 0 3px 0 rgba(31,42,68,.18);
+    font-size: 13px; font-weight: 800; line-height: 1.25; }
+  .opt small { display: block; font-weight: 600; font-size: 11px; opacity: .65; }
+  .opt.on { box-shadow: 0 0 0 3px var(--accent), 0 3px 0 rgba(31,42,68,.18); }
+  .opt:disabled { opacity: .45; cursor: default; }
+  .unlock { background: #fff3c4; border-radius: 12px; padding: 8px 12px; margin-top: 8px; font-weight: 800; font-size: 14px; }
+  .quip { font-family: ui-monospace, Menlo, monospace; font-weight: 800; font-size: 14px; color: var(--accent-dark); margin: 4px 0 -4px; }
+  .newbest { display: inline-block; background: #ffb703; color: #fff; font-weight: 900; border-radius: 10px; padding: 2px 10px; font-size: 13px; }
+
+  @media (max-height: 560px) {
+    .rider { height: 58px; }
+    .rider .nm { display: none; }
+    #hint { bottom: calc(env(safe-area-inset-bottom) + 84px); }
+    h1 { font-size: 34px; }
+  }
+  /* Menu: the logo sits in the sky, the river shows in the middle, the buttons sit at the bottom */
+  #scrMenu { background: none; grid-template-rows: auto 1fr; place-items: stretch; padding: 14px 12px calc(env(safe-area-inset-bottom) + 14px); gap: 8px; }
+  #scrMenu .logo { text-align: center; padding-top: env(safe-area-inset-top); }
+  #scrMenu h1 { font-size: clamp(44px, 14vw, 72px); font-weight: 900; color: #fff; -webkit-text-stroke: 8px #ff6b5a; paint-order: stroke fill; text-shadow: 0 5px 0 #c8383f; }
+  #scrMenu .tag { display: table; margin: 8px auto 0; padding: 3px 12px; border-radius: 12px; background: rgba(255,250,240,.92); color: #1f2a44; opacity: 1; font-weight: 800; font-size: 14px; }
+  #scrMenu .card { align-self: end; margin: 0 auto; padding: 8px 14px 12px; border-radius: 22px; }
+  #scrMenu .levels { margin-top: 12px; }
+  .howto { margin-top: 10px; font-size: 14px; }
+  .howto summary { font-weight: 800; opacity: .7; cursor: pointer; padding: 2px; }
+  .howto .how { margin: 8px 0; }
+  .howto .keys { margin: 0; }
+  /* Wide frames: logo and buttons on the left and at the top, so Start is on screen even when the frame is taller than a sideways phone */
+  @media (min-aspect-ratio: 1/1) {
+    #scrMenu { justify-items: start; align-content: start; grid-template-rows: auto auto; }
+    #scrMenu .logo { text-align: left; }
+    #scrMenu .tag { margin-left: 0; }
+    #scrMenu .card { align-self: start; margin: 0; width: min(380px, 56vw); }
+  }
+  @media (max-height: 560px) {
+    #scrMenu h1 { font-size: 38px; -webkit-text-stroke-width: 6px; }
+    #scrMenu .tag { display: none; }
+    #scrMenu .btn { padding: 10px; }
+    #scrMenu .lvl { padding: 6px 4px; }
+    #scrMenu .levels { margin-top: 10px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="hud-left">
+      <div id="hearts" class="chip"></div>
+      <div id="beans" class="chip">0</div>
+    </div>
+    <div class="hud-mid chip">
+      <div id="lvlname"></div>
+      <div id="timer">0:00.0</div>
+    </div>
+    <div class="hud-right">
+      <button id="btnMute" class="icon" aria-label="Toggle sound"></button>
+      <button id="btnPause" class="icon" aria-label="Pause">
+        <svg viewBox="0 0 20 20"><rect x="4" y="3" width="4" height="14" rx="1.5" fill="#1f2a44"/><rect x="12" y="3" width="4" height="14" rx="1.5" fill="#1f2a44"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="progress"><div id="progFill"></div><div id="progRaft"></div></div>
+</div>
+
+<div id="flash" class="hidden"></div>
+<div id="bubble" class="hidden"></div>
+<div id="hint" class="hidden"></div>
+<div id="pad" class="hidden"></div>
+
+<section id="scrMenu" class="screen">
+  <div class="logo">
+    <h1>Toot Raft</h1>
+    <div class="tag">Four friends. One raft. Zero shame.</div>
+  </div>
+  <div class="card">
+    <button class="btn" id="btnStart">Start</button>
+    <div class="row">
+      <button class="btn alt" id="btnDaily">Daily river</button>
+      <button class="btn alt" id="btnWardrobe">Wardrobe</button>
+    </div>
+    <div class="levels" id="levels"></div>
+    <details class="howto">
+      <summary>How to play</summary>
+      <div class="how">
+        <p>Every rider's <b>toot pushes the raft the other way</b>.</p>
+        <p>The raft keeps <b>spinning</b>, so watch who is at the back.</p>
+        <p><b>Spikes pop a heart.</b> Soft green walls are safe to bump.</p>
+        <p>Grab <b>beans</b> to refill gas. Reach the finish fast.</p>
+        <p>Toot the <b>same pig 3 times fast</b> for a ROCKET TOOT.</p>
+      </div>
+      <div class="keys">
+        Tap a rider or the buttons · <kbd>1</kbd>–<kbd>4</kbd> toot that rider<br>
+        <kbd>Arrows</kbd>/<kbd>WASD</kbd> or tap the water: best rider toots that way<br>
+        <kbd>P</kbd> pause · <kbd>R</kbd> restart
+      </div>
+    </details>
+  </div>
+</section>
+
+<section id="scrWardrobe" class="screen hidden">
+  <div class="card">
+    <h2>Wardrobe</h2>
+    <div class="tag" id="wardBeans"></div>
+    <div class="pigs" id="wardPigs"></div>
+    <div class="wlabel">Hats</div>
+    <div class="opts" id="wardHats"></div>
+    <div class="wlabel">Outfits</div>
+    <div class="opts" id="wardOutfits"></div>
+    <button class="btn" id="btnWardDone">Done</button>
+  </div>
+</section>
+
+<section id="scrPause" class="screen hidden">
+  <div class="card">
+    <h2>Paused</h2>
+    <button class="btn" id="btnResume">Resume</button>
+    <div class="row">
+      <button class="btn alt" id="btnRestart">Restart</button>
+      <button class="btn alt" id="btnMenu1">Menu</button>
+    </div>
+  </div>
+</section>
+
+<section id="scrResult" class="screen hidden">
+  <div class="card" id="resultCard"></div>
+</section>
+
+<script>/*__THREE__*/</script>
+<script>
+/* No recorded clips in this build: the built-in synth toots play. */
+window.SFX_DATA = null;
+</script>
+<script>
+'use strict';
+
+/* =========================================================
+   Config
+   ========================================================= */
+const RAFT_R = 34;            // raft radius (world units)
+const RIDER_DIST = 21;        // rider distance from raft centre
+const TOOT_IMPULSE = 140;     // velocity change per toot
+const WATER_DRAG = 0.85;      // how fast the raft settles to the current
+const CURRENT = 22;           // gentle downstream push
+const MAX_SPEED = 420;
+const GAS_MAX = 3;            // toots stored per rider
+const GAS_RECHARGE = 1.0;     // seconds to regain one toot
+const MAX_HEARTS = 3;
+const INVULN = 1.4;
+const START_WALL = -90;       // dock behind the start line
+const SPIKE_IN = 16;          // spiked walls reach further into the water
+const BUMP_IN = 7;
+const STEP = 1 / 120;         // fixed physics step
+
+const RIDERS = [
+  // color/dark = team colour (buttons, badges); fur/furDark = skin in the sprites
+  { name: 'Pip', animal: 'pig', color: '#8fb4ff', dark: '#3b6fd6', fur: '#ffa8c2', furDark: '#d9668c', key: '1' },
+  { name: 'Ham', animal: 'pig', color: '#ff8a8f', dark: '#c8383f', fur: '#f59bb5', furDark: '#cc5a80', key: '2' },
+  { name: 'Bun', animal: 'pig', color: '#ffd54a', dark: '#d99a12', fur: '#ffb9a8', furDark: '#d9786a', key: '3' },
+  { name: 'Lou', animal: 'pig', color: '#5fe0d3', dark: '#1f9a8f', fur: '#f0a6c8', furDark: '#c0628f', key: '4' },
+];
+
+const LEVELS = [
+  { name: 'Lazy Creek',   length: 3200, seed: 11, amp: 110, width: [150, 180], spikeFrac: 0.3,
+    spacing: 430, weights: { log: 3, gate: 2, mine: 1, whirl: 1 }, par: 40 },
+  { name: 'Spiky Bends',  length: 4300, seed: 29, amp: 150, width: [125, 155], spikeFrac: 0.55,
+    spacing: 360, weights: { log: 3, gate: 3, mine: 3, whirl: 2 }, par: 55 },
+  { name: 'Gas Gauntlet', length: 5400, seed: 73, amp: 175, width: [112, 138], spikeFrac: 0.8,
+    spacing: 315, weights: { log: 3, gate: 4, mine: 3, whirl: 2 }, par: 70 },
+];
+
+/* Wardrobe: unlocked by lifetime beans collected (nothing is spent) */
+const HATS = [
+  { id: 'none', name: 'No hat', cost: 0 },
+  { id: 'party', name: 'Party hat', cost: 10 },
+  { id: 'cap', name: 'Cap', cost: 25 },
+  { id: 'cowboy', name: 'Cowboy', cost: 50 },
+  { id: 'crown', name: 'Crown', cost: 90 },
+  { id: 'viking', name: 'Viking', cost: 140 },
+];
+const OUTFIT_SKINS = [
+  { id: 'classic', name: 'Classic', cost: 0 },
+  { id: 'midnight', name: 'Midnight', cost: 20,
+    c: { shirt: '#3a3a4a', shirtDark: '#26262f', pants: '#1f2a44', pantsDark: '#141b2e', shoe: '#e5484d', ink: '#ffffff' } },
+  { id: 'bubblegum', name: 'Bubblegum', cost: 45,
+    c: { shirt: '#ff8fc7', shirtDark: '#e0609f', pants: '#8a5cf6', pantsDark: '#6a3fd6', shoe: '#ffffff', ink: '#1f2a44' } },
+  { id: 'camo', name: 'Camo', cost: 80,
+    c: { shirt: '#6b8e3d', shirtDark: '#4f6b2b', pants: '#8b7d4f', pantsDark: '#6b5f3a', shoe: '#3d2b1f', ink: '#ffffff' } },
+  { id: 'gold', name: 'Gold', cost: 120,
+    c: { shirt: '#ffc107', shirtDark: '#d39e00', pants: '#6b4226', pantsDark: '#4e2f1a', shoe: '#2d2d3a', ink: '#1f2a44' } },
+];
+
+/* Daily river: a fresh course generated from today's date */
+const DAILY = 'daily';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function todayKey() { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
+function fmtDay(key) { return MONTHS[Math.floor(key / 100) % 100 - 1] + ' ' + (key % 100); }
+function dailyDef(key) {
+  const r = mulberry32(key);
+  return { name: 'Daily River', daily: key, length: 3800 + Math.round(r() * 800), seed: key, amp: 130 + r() * 40,
+    width: [118 + r() * 12, 145 + r() * 10], spikeFrac: 0.45 + r() * 0.25, spacing: 340 + r() * 40,
+    weights: { log: 3, gate: 3, mine: 2 + Math.round(r() * 2), whirl: 2 }, par: 60 };
+}
+
+/* =========================================================
+   Helpers
+   ========================================================= */
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function fmtTime(t) {
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1);
+}
+
+/* =========================================================
+   Save data (best-effort; game works without storage)
+   ========================================================= */
+const SAVE_KEY = 'tootraft.v1';
+let save = { unlocked: 1, best: {}, muted: false, beanBank: 0, looks: null, daily: null };
+try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) save = Object.assign(save, s); } catch (e) {}
+function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+
+/* =========================================================
+   Sound (procedural Web Audio, no files)
+   ========================================================= */
+const Sound = {
+  ctx: null, master: null, noise: null, muted: save.muted,
+  unlock() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.muted ? 0 : 0.55;
+      this.master.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate;
+      this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = this.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      this.loadClips();
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  setMuted(m) {
+    this.muted = m; save.muted = m; writeSave();
+    if (this.master) this.master.gain.value = m ? 0 : 0.55;
+  },
+  env(g, t, peak, dur) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  },
+  tone(freq, dur, type, vol, slideTo, delay) {
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime + (delay || 0);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    this.env(g, t, vol, dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+  hiss(dur, freq, vol, type) {
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime;
+    const n = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    n.buffer = this.noise; f.type = type || 'bandpass'; f.frequency.value = freq; f.Q.value = 0.9;
+    this.env(g, t, vol, dur);
+    n.connect(f); f.connect(g); g.connect(this.master);
+    n.start(t); n.stop(t + dur + 0.05);
+  },
+  // Recorded clips (embedded as base64 in SFX_DATA) decoded once audio is unlocked.
+  clips: null,
+  loadClips() {
+    const data = window.SFX_DATA;
+    if (!data || this.clips || !this.ctx) return;
+    this.clips = { toot: [], long: [], pop: [] };
+    const decode = (b64, list) => {
+      const bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const done = ab => {
+        // normalise loudness and skip the encoder's leading silence
+        const ch = ab.getChannelData(0);
+        let peak = 0.0001, start = 0;
+        for (let i = 0; i < ch.length; i++) { const v = Math.abs(ch[i]); if (v > peak) peak = v; }
+        while (start < ch.length && Math.abs(ch[start]) < peak * 0.05) start++;
+        list.push({ buf: ab, gain: Math.min(4, 0.85 / peak), start: start / ab.sampleRate });
+      };
+      try {
+        const p = this.ctx.decodeAudioData(bytes.buffer, done, () => {});
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    };
+    data.toot.forEach(b => decode(b, this.clips.toot));
+    data.long.forEach(b => decode(b, this.clips.long));
+    decode(data.pop, this.clips.pop);
+  },
+  playClip(list, rate, vol, maxDur, delay) {
+    if (!this.ctx || !list || !list.length) return false;
+    const c = list[Math.floor(Math.random() * list.length)];
+    const t = this.ctx.currentTime + (delay || 0);
+    const s = this.ctx.createBufferSource(), g = this.ctx.createGain();
+    s.buffer = c.buf; s.playbackRate.value = rate;
+    const len = Math.min(maxDur, (c.buf.duration - c.start) / rate);
+    const v = vol * c.gain;
+    g.gain.setValueAtTime(v, t);
+    g.gain.setValueAtTime(v, t + Math.max(0, len - 0.08));
+    g.gain.linearRampToValueAtTime(0.0001, t + len);
+    s.connect(g); g.connect(this.master);
+    s.start(t, c.start); s.stop(t + len + 0.02);
+    return true;
+  },
+  toot(i) {
+    // each rider has their own pitch: Pip deep, Lou squeaky
+    const rate = [0.82, 1, 1.15, 1.32][i] * (0.94 + Math.random() * 0.12);
+    if (!this.playClip(this.clips && this.clips.toot, rate, 0.9, 0.9)) this.synthToot(i);
+  },
+  rocket() {
+    if (!this.playClip(this.clips && this.clips.long, 1.25, 1, 1.1)) this.synthToot(0);
+  },
+  mega() {
+    if (!this.playClip(this.clips && this.clips.long, 0.95, 1, 2.2)) this.synthToot(0);
+  },
+  synthToot(i) {
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime;
+    const base = [88, 118, 150, 185][i] * (0.9 + Math.random() * 0.2);
+    const dur = 0.25 + Math.random() * 0.25;
+    const o = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain();
+    const f = c.createBiquadFilter(), g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(base * 1.15, t);
+    o.frequency.exponentialRampToValueAtTime(base * 0.7, t + dur);
+    lfo.frequency.value = 20 + Math.random() * 18; lg.gain.value = base * 0.35;
+    lfo.connect(lg); lg.connect(o.frequency);
+    f.type = 'lowpass'; f.frequency.value = 650; f.Q.value = 5;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+    g.gain.setValueAtTime(0.5, t + dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f); f.connect(g); g.connect(this.master);
+    o.start(t); lfo.start(t); o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+    this.hiss(dur * 0.8, 380, 0.22);
+  },
+  squeak(i) {
+    const rate = [1.3, 1.5, 1.7, 1.9][i] * (0.94 + Math.random() * 0.12);
+    if (!this.playClip(this.clips && this.clips.toot, rate, 0.5, 0.3)) this.synthToot(i);
+  },
+  bump() { this.tone(110, 0.14, 'sine', 0.35, 60); },
+  hurt() { this.hiss(0.25, 900, 0.35); this.tone(420, 0.3, 'square', 0.12, 140); },
+  pop() {
+    this.hiss(0.5, 1600, 0.35);
+    if (!this.playClip(this.clips && this.clips.pop, 1, 1, 3)) this.tone(600, 0.9, 'sawtooth', 0.15, 60);
+  },
+  bean() { this.tone(660, 0.07, 'square', 0.12, 880); this.tone(990, 0.1, 'square', 0.1, 1320, 0.06); },
+  win() {
+    [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.22, 'triangle', 0.25, null, i * 0.11));
+    this.playClip(this.clips && this.clips.long, 1.1, 1, 1.8, 0.5); // victory toot
+  },
+};
+
+/* =========================================================
+   Track generation
+   The river runs "up" the screen: distance d along the river maps to y = -d.
+   ========================================================= */
+function buildTrack(def) {
+  const rnd = mulberry32(def.seed);
+  const p1 = rnd() * 6.283, p2 = rnd() * 6.283, p3 = rnd() * 6.283;
+  const L = def.length;
+  const T = { L, def };
+
+  T.cx = d => {
+    const a = def.amp * smooth(150, 650, d);
+    return a * (0.62 * Math.sin(d / 420 + p1) + 0.38 * Math.sin(d / 185 + p2));
+  };
+  T.hw = d => {
+    const [lo, hi] = def.width;
+    let w = lo + (hi - lo) * (0.5 + 0.5 * Math.sin(d / 290 + p3));
+    w = lerp(180, w, smooth(200, 450, d));
+    return lerp(w, 175, smooth(L - 250, L, d));
+  };
+  // Frame at distance d: centre point, half width, normal n (to the right) and forward f.
+  T.frame = d => {
+    const s = (T.cx(d + 1) - T.cx(d - 1)) / 2;
+    const N = Math.sqrt(1 + s * s);
+    return { d, cx: T.cx(d), hw: T.hw(d), nx: 1 / N, ny: s / N, fx: s / N, fy: -1 / N };
+  };
+  // World point -> river coordinates (d along, u across)
+  T.toLocal = (x, y) => {
+    let d = -y;
+    for (let it = 0; it < 3; it++) {
+      const f = T.frame(d);
+      d += (x - f.cx) * f.fx + (y + d) * f.fy;
+    }
+    const f = T.frame(d);
+    return { d, u: (x - f.cx) * f.nx + (y + d) * f.ny, f };
+  };
+  T.point = (d, u) => { const f = T.frame(d); return { x: f.cx + u * f.nx, y: -d + u * f.ny }; };
+
+  // Spiked wall sections: [left, right]
+  T.spikes = [[], []];
+  for (let side = 0; side < 2; side++) {
+    let d = 350;
+    while (d < L - 120) {
+      const len = 140 + rnd() * 260;
+      if (rnd() < def.spikeFrac) T.spikes[side].push([d, Math.min(d + len, L - 120)]);
+      d += len;
+    }
+  }
+  T.spiked = (side, d) => {
+    const arr = T.spikes[side];
+    for (let i = 0; i < arr.length; i++) if (d >= arr[i][0] && d <= arr[i][1]) return true;
+    return false;
+  };
+
+  // Hazards and beans
+  const bag = [];
+  for (const k in def.weights) for (let i = 0; i < def.weights[k]; i++) bag.push(k);
+  T.hazards = []; T.beans = [];
+  const addBeans = (d, n) => {
+    const hw = T.hw(d);
+    const u = (rnd() - 0.5) * hw * 1.1;
+    for (let i = 0; i < n; i++) {
+      const p = T.point(d + i * 42, u);
+      T.beans.push({ x: p.x, y: p.y, got: false, bob: rnd() * 6 });
+    }
+  };
+  addBeans(220, 3);
+  // deal hazard types from a shuffled bag so every river gets the full mix
+  let deck = [];
+  const draw = () => {
+    if (!deck.length) {
+      deck = bag.slice();
+      for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+    }
+    return deck.pop();
+  };
+  let d = 650;
+  while (d < L - 380) {
+    const type = draw();
+    const f = T.frame(d);
+    const h = { type, d, f, x: f.cx, y: -d };
+    let extra = 0;
+    if (type === 'gate') { h.period = 3.4 + rnd() * 1.4; h.phase = rnd() * 6.283; }
+    if (type === 'log') {
+      h.side = rnd() < 0.5 ? -1 : 1; h.len = 0.36 + rnd() * 0.2;
+      // later rivers sometimes add a second log on the other side (slalom)
+      if (def.spikeFrac > 0.5 && rnd() < 0.55) {
+        const f2 = T.frame(d + 150);
+        T.hazards.push({ type: 'log', d: d + 150, f: f2, x: f2.cx, y: -(d + 150), side: -h.side, len: 0.32 + rnd() * 0.18 });
+        extra = 150;
+      }
+    }
+    if (type === 'mine') { h.speed = 1.1 + rnd() * 0.7; h.phase = rnd() * 6.283; }
+    if (type === 'whirl') {
+      h.u = (rnd() - 0.5) * f.hw * 0.7; h.r = 92; h.dir = rnd() < 0.5 ? -1 : 1;
+      const p = T.point(d, h.u); h.x = p.x; h.y = p.y;
+    }
+    T.hazards.push(h);
+    const gap = def.spacing * (0.85 + rnd() * 0.4);
+    if (rnd() < 0.8) addBeans(d + extra + gap * 0.5 - 40, 2 + Math.floor(rnd() * 2));
+    d += gap + extra;
+  }
+  T.hazards.sort((a, b) => a.d - b.d);
+  return T;
+}
+
+function gateOpen(h, t) { return clamp(0.5 + 0.85 * Math.sin(t * 6.283 / h.period + h.phase), 0, 1); }
+function mineU(h, t) { return (h.f.hw - 30) * Math.sin(t * h.speed + h.phase); }
+
+/* =========================================================
+   Game state
+   ========================================================= */
+const G = {
+  state: 'menu',     // menu | playing | paused | result
+  level: 0, track: null, raft: null,
+  t: 0, simTime: 0, time: 0, started: false,
+  hearts: MAX_HEARTS, beans: 0, invuln: 0, ending: null, toots: 0,
+  parts: [], rings: [], ringTimer: 0, shake: 0, loc: null,
+  runTotal: 0, lastResult: null,
+  quip: null, quipCd: 0, flash: null, flashCd: 0, recent: [], prevD: 0,
+  def: null, combo: { rider: -1, n: 0, t: -9 },
+};
+
+/* =========================================================
+   Quips: little speech bubbles and big screen captions
+   ========================================================= */
+const QUIPS = {
+  spam: ['WOW, YOU ALMOST POOPED!', 'EASY! THAT ONE WAS RISKY', 'SOMEBODY CHECK THEIR SHORTS', 'SIR, THIS IS A RAFT', 'CAREFUL, IT GETS CHUNKY'],
+  rider: [
+    ['That one was organic', 'Pardon my turbo', 'Oink... excuse me', 'Bacon-scented!'],
+    ['Ham-powered!', 'Leg day, gas day', 'Feel the burn. Smell it too', 'No pain, no gain'],
+    ['Oopsie, that was me', 'Not my proudest moment', 'Pardon me, darling', 'Sweet and sour'],
+    ['I regret nothing', 'Too cool to clench', 'Deal with it', 'Smooth operator'],
+  ],
+  rocket: ['Houston, we have a smell', 'To infinity and be-hind!', 'Full throttle!', 'Engines at 100%'],
+  mega: ['That one had a soul', 'The fish are leaving', 'Was that thunder?', 'I felt that in my ears'],
+  hurt: ['Ouch, right in the cushion', 'My butt has a hole now', 'Who put spikes HERE?', 'Not the raft!'],
+  empty: ['Tank empty...', 'Nothing left but dreams', 'Only sad air', 'Give me beans'],
+  bean: ['Bean power!', 'Reloading...', 'Musical fruit!', 'Fuel acquired'],
+  whirl: ['Spin cycle!', 'I can see my lunch', 'Wheee... bleh'],
+  gate: ['Clenched it!', 'Squeezed through!', 'Tight squeeze!'],
+  start: ['Let it rip!', 'Beans in, butts out!', 'Hold on to your tails'],
+  loseLine: ['Too much pressure in one place.', 'The raft could not handle the beans.', 'RIP raft. It was a good raft.'],
+  winLine: ['Smells like victory.', 'Nobody pooped. Mostly.', 'The river will never be the same.'],
+};
+const pick = a => a[Math.floor(Math.random() * a.length)];
+// rider: index of the speaker, or -1 for the whole raft
+function say(text, rider, force) {
+  if (!force && G.quipCd > 0) return;
+  G.quip = { text, rider, life: 1.9 };
+  G.quipCd = 2.2;
+}
+function flash(text) { G.flash = { text, life: 1.7 }; }
+
+function newRaft(T) {
+  return {
+    x: T.cx(40), y: -40, vx: 0, vy: 0,
+    ang: Math.PI / 2,   // rider 1 (Pip) starts at the back
+    w: 0, scale: 1,
+    riders: RIDERS.map(() => ({ gas: GAS_MAX, anim: 0, fizz: 0 })),
+  };
+}
+
+function loadLevel(i) {
+  G.level = i;
+  G.def = i === DAILY ? dailyDef(todayKey()) : LEVELS[i];
+  G.track = buildTrack(G.def);
+  G.track.beans.forEach(b => (b.got = false));
+  G.raft = newRaft(G.track);
+  G.loc = G.track.toLocal(G.raft.x, G.raft.y);
+  G.t = 0; G.simTime = 0; G.started = false; G.hearts = MAX_HEARTS; G.beans = 0;
+  G.invuln = 0; G.ending = null; G.toots = 0; G.parts.length = 0; G.rings.length = 0; G.shake = 0;
+  G.quip = null; G.quipCd = 0; G.flash = null; G.flashCd = 0; G.recent.length = 0; G.prevD = G.loc.d;
+  G.combo = { rider: -1, n: 0, t: -9 };
+  G.track.hazards.forEach(h => (h.inside = false));
+  R3D.buildLevel(G.track);
+}
+
+// Stratos analytics (see CLAUDE.md, "Analytics before launch")
+function track(name, details) { try { var S = window.Stratos || parent.Stratos; if (S) S.track(name, details); } catch (e) {} }
+function riverInfo(extra) { return Object.assign({ level: G.level === DAILY ? 'daily' : G.level + 1, river: G.def.name }, extra); }
+
+function startLevel(i, freshRun) {
+  if (freshRun) G.runTotal = 0;
+  loadLevel(i);
+  track('level_start', riverInfo());
+  setState('playing');
+  UI.hint.textContent = i === 0
+    ? 'Pip is at the back. Press 1 or tap Pip to toot forward.'
+    : i === DAILY ? 'Daily river for ' + fmtDay(G.def.daily) + '. Same course for everyone today.'
+    : G.def.name + ': watch the spin and time the gates.';
+  UI.hint.classList.remove('hidden');
+  UI.hint.style.opacity = 1;
+}
+
+/* =========================================================
+   Actions
+   ========================================================= */
+function riderAngle(i) { return G.raft.ang + i * Math.PI / 2; }
+
+function toot(i) {
+  if (G.state !== 'playing' || G.ending) return false;
+  const r = G.raft, rd = r.riders[i];
+  // every press farts: a rider out of gas squeezes out a weak little squeaker instead
+  const weak = rd.gas < 1;
+  if (weak) rd.fizz = 0.35; else rd.gas -= 1;
+  rd.anim = 1;
+  // the same pig three times in quick succession = ROCKET TOOT
+  if (!weak && G.combo.rider === i && G.simTime - G.combo.t < 0.9) G.combo.n++;
+  else G.combo.n = weak ? 0 : 1;
+  G.combo.rider = i; G.combo.t = G.simTime;
+  const rocket = G.combo.n >= 3;
+  if (rocket) G.combo.n = 0;
+  // now and then a toot comes out as a MEGA TOOT: bigger push, bigger cloud, longer sound
+  const mega = !weak && !rocket && G.toots > 4 && Math.random() < 0.05;
+  const power = weak ? 0.35 : rocket ? 1.9 : mega ? 1.4 : 1;
+  const a = riderAngle(i), ux = Math.cos(a), uy = Math.sin(a);
+  r.vx -= ux * TOOT_IMPULSE * power; r.vy -= uy * TOOT_IMPULSE * power;
+  r.w += (Math.random() - 0.5) * (mega ? 1.4 : 0.5);
+  // gas cloud from the rider's rear end
+  const ox = r.x + ux * (RAFT_R + 4), oy = r.y + uy * (RAFT_R + 4) - 10;
+  for (let k = 0; k < (rocket ? 34 : mega ? 30 : weak ? 4 : 18); k++) {
+    const spread = (Math.random() - 0.5) * (mega ? 1.4 : 0.9), sp = (70 + Math.random() * 190) * power;
+    const ca = a + spread;
+    G.parts.push({ kind: 'gas', x: ox, y: oy, vx: Math.cos(ca) * sp, vy: Math.sin(ca) * sp,
+      r: (6 + Math.random() * 6) * power, gr: (26 + Math.random() * 20) * power, life: 0.9 + Math.random() * 0.5, max: 1.3, rocket });
+  }
+  G.started = true; G.toots++;
+  if (G.toots >= 3) UI.hint.style.opacity = 0;
+
+  // jokes
+  G.recent.push(G.simTime);
+  while (G.recent.length && G.simTime - G.recent[0] > 1.3) G.recent.shift();
+  if (rocket) {
+    Sound.rocket(); G.shake = 0.35; G.flashCd = 3;
+    flash('ROCKET TOOT!'); say(pick(QUIPS.rocket), i, true);
+  } else if (mega) {
+    Sound.mega(); G.shake = 0.3;
+    flash('MEGA TOOT!'); say(pick(QUIPS.mega), i, true);
+  } else {
+    if (weak) Sound.squeak(i); else Sound.toot(i);
+    if (weak && Math.random() < 0.5) say(pick(QUIPS.empty), i);
+    else if (G.recent.length >= 4 && G.flashCd <= 0) { flash(pick(QUIPS.spam)); G.flashCd = 7; G.recent.length = 0; }
+    else if (G.toots === 1) say(pick(QUIPS.start), i, true);
+    else if (Math.random() < 0.16) say(pick(QUIPS.rider[i]), i);
+  }
+  flashPad(i);
+  return true;
+}
+
+// Toot whichever rider pushes closest to the wanted direction.
+function autoToot(dx, dy) {
+  if (G.state !== 'playing' || G.ending) return;
+  const len = Math.hypot(dx, dy); if (len < 1e-6) return;
+  dx /= len; dy /= len;
+  // prefer a well-aimed rider with gas; otherwise the best-aimed one does a weak squeaker
+  let best = 0, bestDot = -2, full = -1, fullDot = 0.3;
+  for (let i = 0; i < 4; i++) {
+    const a = riderAngle(i), dot = -(Math.cos(a) * dx + Math.sin(a) * dy);
+    if (dot > bestDot) { bestDot = dot; best = i; }
+    if (G.raft.riders[i].gas >= 1 && dot > fullDot) { fullDot = dot; full = i; }
+  }
+  toot(full >= 0 ? full : best);
+}
+
+function hurt(nx, ny) {
+  if (G.invuln > 0 || G.ending) return;
+  const r = G.raft;
+  G.hearts--; G.invuln = INVULN; G.shake = 0.4;
+  r.vx += nx * 110; r.vy += ny * 110;
+  burst(r.x - nx * RAFT_R, r.y - ny * RAFT_R, 14, ['#ffffff', '#ff6b5a', '#ffd54a']);
+  if (G.hearts <= 0) {
+    G.ending = { type: 'pop', t: 0 };
+    Sound.pop(); flash('TOO MUCH PRESSURE!'); G.quip = null;
+  } else { Sound.hurt(); say(pick(QUIPS.hurt), Math.floor(Math.random() * 4), true); }
+}
+
+function hit(nx, ny, harmful, e) {
+  const r = G.raft, vn = r.vx * nx + r.vy * ny;
+  if (vn < 0) {
+    r.vx -= (1 + e) * vn * nx; r.vy -= (1 + e) * vn * ny;
+    r.w += (Math.random() - 0.5) * Math.min(2, -vn / 80);
+    if (-vn > 40 && !harmful) { Sound.bump(); splash(r.x - nx * RAFT_R, r.y - ny * RAFT_R, 6); }
+  }
+  if (harmful) hurt(nx, ny);
+}
+
+/* =========================================================
+   Physics
+   ========================================================= */
+function collideWalls() {
+  const r = G.raft, T = G.track;
+  const L = T.toLocal(r.x, r.y);
+  G.loc = L;
+  for (const side of [-1, 1]) {
+    const spk = T.spiked(side < 0 ? 0 : 1, L.d);
+    const lim = L.f.hw - (spk ? SPIKE_IN : BUMP_IN) - RAFT_R;
+    const over = side * L.u - lim;
+    if (over > 0) {
+      const nx = -side * L.f.nx, ny = -side * L.f.ny;
+      r.x += nx * over; r.y += ny * over;
+      hit(nx, ny, spk, 0.55);
+    }
+  }
+  if (L.d < START_WALL + RAFT_R) {
+    const over = START_WALL + RAFT_R - L.d;
+    r.x += L.f.fx * over; r.y += L.f.fy * over;
+    hit(L.f.fx, L.f.fy, false, 0.5);
+  }
+}
+
+// circle (lu, lv, R) against axis-aligned rect in a hazard's local frame
+function circleRect(lu, lv, u0, u1, v0, v1) {
+  const qu = clamp(lu, u0, u1), qv = clamp(lv, v0, v1);
+  const du = lu - qu, dv = lv - qv, d2 = du * du + dv * dv;
+  if (d2 >= RAFT_R * RAFT_R) return null;
+  if (d2 < 1e-6) {
+    const s = lv >= (v0 + v1) / 2 ? 1 : -1;
+    return { nu: 0, nv: s, pen: RAFT_R + (s > 0 ? v1 - lv : lv - v0) };
+  }
+  const dist = Math.sqrt(d2);
+  return { nu: du / dist, nv: dv / dist, pen: RAFT_R - dist };
+}
+
+function resolveLocal(h, c) {
+  const r = G.raft, f = h.f;
+  const nx = c.nu * f.nx + c.nv * f.fx, ny = c.nu * f.ny + c.nv * f.fy;
+  r.x += nx * c.pen; r.y += ny * c.pen;
+  hit(nx, ny, true, 0.6);
+}
+
+function collideHazards() {
+  const r = G.raft, t = G.simTime;
+  for (const h of G.track.hazards) {
+    const dx = r.x - h.x, dy = r.y - h.y;
+    if (dx * dx + dy * dy > 300 * 300) continue;
+    const f = h.f;
+    const lu = dx * f.nx + dy * f.ny, lv = dx * f.fx + dy * f.fy;
+    const hw = f.hw;
+    if (h.type === 'log') {
+      const reach = h.len * 2 * hw;
+      const c = h.side > 0 ? circleRect(lu, lv, hw - reach, hw + 30, -16, 16)
+                           : circleRect(lu, lv, -hw - 30, -hw + reach, -16, 16);
+      if (c) resolveLocal(h, c);
+    } else if (h.type === 'gate') {
+      const gap = gateOpen(h, t) * (hw + 4);
+      let c = circleRect(lu, lv, -hw - 30, -gap, -12, 12);
+      if (c) resolveLocal(h, c);
+      c = circleRect(lu, lv, gap, hw + 30, -12, 12);
+      if (c) resolveLocal(h, c);
+    } else if (h.type === 'mine') {
+      const mu = mineU(h, t), du = lu - mu, dist = Math.hypot(du, lv), rr = RAFT_R + 20;
+      if (dist < rr) {
+        const nu = dist > 1e-6 ? du / dist : 0, nv = dist > 1e-6 ? lv / dist : 1;
+        resolveLocal(h, { nu, nv, pen: rr - dist });
+      }
+    }
+  }
+}
+
+function applyWhirls(dt) {
+  const r = G.raft;
+  for (const h of G.track.hazards) {
+    if (h.type !== 'whirl') continue;
+    const dx = r.x - h.x, dy = r.y - h.y, dist = Math.hypot(dx, dy);
+    if (dist >= h.r || dist < 1e-3) { h.inside = false; continue; }
+    if (!h.inside) { h.inside = true; say(pick(QUIPS.whirl), -1, true); }
+    const s = 1 - dist / h.r;
+    const tx = -dy / dist * h.dir, ty = dx / dist * h.dir;
+    r.vx += (tx * 150 - dx / dist * 45) * s * dt;
+    r.vy += (ty * 150 - dy / dist * 45) * s * dt;
+    r.w += h.dir * 3.2 * s * dt;
+  }
+}
+
+function collectBeans() {
+  const r = G.raft;
+  for (const b of G.track.beans) {
+    if (b.got) continue;
+    const dx = r.x - b.x, dy = r.y - b.y;
+    if (dx * dx + dy * dy < (RAFT_R + 12) * (RAFT_R + 12)) {
+      b.got = true; G.beans++;
+      r.riders.forEach(rd => (rd.gas = Math.min(GAS_MAX, rd.gas + 1)));
+      burst(b.x, b.y, 8, ['#ffb347', '#ffd54a', '#ffffff']);
+      Sound.bean();
+      if (Math.random() < 0.35) say(pick(QUIPS.bean), Math.floor(Math.random() * 4));
+    }
+  }
+}
+
+function step(dt) {
+  G.simTime += dt;
+  const r = G.raft, T = G.track;
+  for (const rd of r.riders) {
+    rd.gas = Math.min(GAS_MAX, rd.gas + dt / GAS_RECHARGE);
+    rd.anim = Math.max(0, rd.anim - dt * 4);
+    rd.fizz = Math.max(0, rd.fizz - dt);
+  }
+  if (G.started && !G.ending) G.t += dt;
+  if (G.invuln > 0) G.invuln -= dt;
+
+  // water: drag towards the current
+  const f = G.loc.f, k = 1 - Math.exp(-WATER_DRAG * dt);
+  r.vx += (f.fx * CURRENT - r.vx) * k;
+  r.vy += (f.fy * CURRENT - r.vy) * k;
+  applyWhirls(dt);
+  const sp = Math.hypot(r.vx, r.vy);
+  if (sp > MAX_SPEED) { r.vx *= MAX_SPEED / sp; r.vy *= MAX_SPEED / sp; }
+  r.x += r.vx * dt; r.y += r.vy * dt;
+
+  // lazy spin that drifts back and forth
+  const target = 0.5 * Math.sin(G.simTime * 0.33 + 1.3) + 0.22 * Math.sin(G.simTime * 0.81);
+  r.w += (target - r.w) * (1 - Math.exp(-0.45 * dt));
+  r.w = clamp(r.w, -4, 4);
+  r.ang += r.w * dt;
+
+  if (G.ending) {
+    G.ending.t += dt;
+    if (G.ending.type === 'pop') { r.scale = Math.max(0, 1 - G.ending.t * 1.1); r.w = 9; }
+    collideWalls();
+    if (G.ending.t > 1.8) finishLevel(G.ending.type === 'win');
+    return;
+  }
+
+  collideWalls();
+  collideHazards();
+  collectBeans();
+
+  // squeezed through a gate that was half shut
+  for (const h of T.hazards) {
+    if (h.type === 'gate' && G.prevD < h.d && G.loc.d >= h.d && G.loc.d - G.prevD < 20 && gateOpen(h, G.simTime) < 0.6) {
+      say(pick(QUIPS.gate), -1, true);
+    }
+  }
+  G.prevD = G.loc.d;
+
+  if (G.loc.d >= T.L) {
+    G.ending = { type: 'win', t: 0 };
+    Sound.win(); flash('SMELLS LIKE VICTORY!'); G.quip = null;
+    for (let i = 0; i < 40; i++) burst(r.x, r.y, 1, ['#ff6b5a', '#ffd54a', '#7fd65f', '#b39cff', '#3cc3f2'], 260);
+  }
+
+  // wake rings
+  G.ringTimer -= dt;
+  if (G.ringTimer <= 0 && sp > 35) { G.rings.push({ x: r.x, y: r.y, r: RAFT_R * 0.9, life: 1 }); G.ringTimer = 0.28; }
+}
+
+function updateFx(dt) {
+  G.quipCd -= dt; G.flashCd -= dt;
+  if (G.quip && (G.quip.life -= dt) <= 0) G.quip = null;
+  if (G.flash && (G.flash.life -= dt) <= 0) G.flash = null;
+  for (let i = G.parts.length - 1; i >= 0; i--) {
+    const p = G.parts[i];
+    p.life -= dt;
+    if (p.life <= 0) { G.parts.splice(i, 1); continue; }
+    const drag = p.kind === 'gas' ? 2.2 : 1.2;
+    p.vx *= Math.exp(-drag * dt); p.vy *= Math.exp(-drag * dt);
+    if (p.kind === 'drop') p.vz -= 600 * dt, p.z = Math.max(0, p.z + p.vz * dt);
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.gr) p.r += p.gr * dt;
+  }
+  if (G.parts.length > 500) G.parts.splice(0, G.parts.length - 500);
+  for (let i = G.rings.length - 1; i >= 0; i--) {
+    const g = G.rings[i];
+    g.life -= dt * 0.8; g.r += 26 * dt;
+    if (g.life <= 0) G.rings.splice(i, 1);
+  }
+  G.shake = Math.max(0, G.shake - dt);
+}
+
+function burst(x, y, n, colors, speed) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.283, s = (speed || 160) * (0.4 + Math.random() * 0.8);
+    G.parts.push({ kind: 'conf', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: 3 + Math.random() * 3,
+      life: 0.6 + Math.random() * 0.6, max: 1.2, color: colors[i % colors.length], rot: Math.random() * 6 });
+  }
+}
+function splash(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.283, s = 40 + Math.random() * 80;
+    G.parts.push({ kind: 'drop', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, z: 0, vz: 150 + Math.random() * 120,
+      r: 2.5 + Math.random() * 2, life: 0.6, max: 0.6 });
+  }
+}
+
+/* =========================================================
+   Results
+   ========================================================= */
+function finishLevel(won) {
+  const def = G.def;
+  const res = { won, level: G.level, time: G.t, beans: G.beans, hearts: G.hearts };
+  // every bean ever collected counts towards wardrobe unlocks
+  const bankBefore = save.beanBank || 0;
+  save.beanBank = bankBefore + G.beans;
+  res.unlocked = HATS.concat(OUTFIT_SKINS).filter(o => o.cost > bankBefore && o.cost <= save.beanBank).map(o => o.name);
+  if (won) {
+    res.beanPts = G.beans * 100;
+    res.heartPts = G.hearts * 500;
+    res.timePts = Math.max(0, Math.round((def.par - G.t) * 20));
+    res.score = res.beanPts + res.heartPts + res.timePts;
+    res.stars = 1 + (G.hearts === MAX_HEARTS ? 1 : 0) + (G.t <= def.par ? 1 : 0);
+    if (G.level === DAILY) {
+      const prev = save.daily && save.daily.key === def.daily ? save.daily : null;
+      res.newBest = !prev || res.score > prev.score;
+      if (res.newBest) save.daily = { key: def.daily, score: res.score, time: G.t };
+      else if (G.t < prev.time) prev.time = G.t;
+    } else {
+      const prev = save.best[G.level];
+      res.newBest = !prev || res.score > prev.score;
+      if (res.newBest) save.best[G.level] = { score: res.score, time: G.t };
+      else if (G.t < prev.time) prev.time = G.t;
+      save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, G.level + 2));
+      G.runTotal += res.score;
+    }
+  }
+  writeSave();
+  track(won ? 'level_complete' : 'game_over', riverInfo(won
+    ? { time: Math.round(G.t), beans: G.beans, hearts: G.hearts, score: res.score, stars: res.stars }
+    : { time: Math.round(G.t), beans: G.beans }));
+  G.lastResult = res;
+  setState('result');
+}
+
+/*__RENDERER__*/
+
+/* =========================================================
+   UI (DOM)
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const UI = {
+  hud: $('hud'), pad: $('pad'), hint: $('hint'), hearts: $('hearts'), beans: $('beans'),
+  timer: $('timer'), lvlname: $('lvlname'), progFill: $('progFill'), progRaft: $('progRaft'),
+  menu: $('scrMenu'), pause: $('scrPause'), result: $('scrResult'), resultCard: $('resultCard'),
+  levels: $('levels'), mute: $('btnMute'),
+};
+const ARROW_SVG = '<svg viewBox="0 0 26 26"><path d="M13 3 L21 13 H16 V23 H10 V13 H5 Z" fill="#1f2a44"/></svg>';
+const padBtns = RIDERS.map((R, i) => {
+  const b = document.createElement('button');
+  b.className = 'rider';
+  b.style.setProperty('--c', R.color); b.style.setProperty('--cd', R.dark);
+  b.setAttribute('aria-label', 'Toot ' + R.name);
+  b.innerHTML = '<div class="top"><span class="num">' + R.key + '</span><span class="arrow">' + ARROW_SVG +
+    '</span></div><span class="nm">' + R.name + '</span><span class="gas"><i><b></b></i><i><b></b></i><i><b></b></i></span>';
+  b.addEventListener('pointerdown', e => { e.preventDefault(); Sound.unlock(); toot(i); });
+  UI.pad.appendChild(b);
+  return { el: b, arrow: b.querySelector('.arrow'), gas: [...b.querySelectorAll('.gas b')] };
+});
+function flashPad(i) {
+  const el = padBtns[i].el; el.classList.add('pressed');
+  setTimeout(() => el.classList.remove('pressed'), 90);
+}
+
+function setMuteIcon() {
+  UI.mute.innerHTML = Sound.muted
+    ? '<svg viewBox="0 0 20 20"><path d="M3 7h3l4-4v14l-4-4H3z" fill="#1f2a44"/><path d="M13 7l5 6M18 7l-5 6" stroke="#1f2a44" stroke-width="2" stroke-linecap="round"/></svg>'
+    : '<svg viewBox="0 0 20 20"><path d="M3 7h3l4-4v14l-4-4H3z" fill="#1f2a44"/><path d="M13 6.5c1.5 1.8 1.5 5.2 0 7M15.5 4c3 3.2 3 8.8 0 12" stroke="#1f2a44" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
+}
+
+function buildLevelButtons() {
+  UI.levels.innerHTML = '';
+  LEVELS.forEach((L, i) => {
+    const b = document.createElement('button');
+    b.className = 'lvl';
+    const best = save.best[i];
+    const locked = i >= save.unlocked;
+    b.disabled = locked;
+    b.innerHTML = '<b>' + (i + 1) + '. ' + L.name + '</b>' +
+      (locked ? 'Locked' : best ? 'Best ' + best.score + '<br>' + fmtTime(best.time) : 'Not played');
+    b.addEventListener('click', () => { Sound.unlock(); startLevel(i, i === 0); });
+    UI.levels.appendChild(b);
+  });
+  const today = todayKey(), d = save.daily && save.daily.key === today ? save.daily : null;
+  $('btnDaily').innerHTML = 'Daily river<small>' + fmtDay(today) + (d ? ' · best ' + fmtTime(d.time) : ' · new course') + '</small>';
+  $('btnWardrobe').innerHTML = 'Wardrobe<small>' + (save.beanBank || 0) + ' beans</small>';
+}
+
+let wardPig = 0;
+function setLook(i, key, value) {
+  if (!save.looks) save.looks = RIDERS.map((_, j) => lookOf(j));
+  save.looks[i] = Object.assign({}, lookOf(i), { [key]: value });
+  writeSave();
+  R3D.refreshLooks();
+}
+function buildWardrobe() {
+  const bank = save.beanBank || 0;
+  $('wardBeans').textContent = 'Beans collected: ' + bank + '. Collect more to unlock more.';
+  const pigs = $('wardPigs');
+  pigs.innerHTML = '';
+  RIDERS.forEach((R, i) => {
+    const b = document.createElement('button');
+    b.className = 'pig' + (i === wardPig ? ' on' : '');
+    b.style.setProperty('--c', R.color); b.style.setProperty('--cd', R.dark);
+    b.appendChild(R3D.pigPreview(i));
+    b.appendChild(document.createTextNode(R.key + ' · ' + R.name));
+    b.addEventListener('click', () => { wardPig = i; buildWardrobe(); });
+    pigs.appendChild(b);
+  });
+  const options = (el, list, key) => {
+    el.innerHTML = '';
+    list.forEach(o => {
+      const b = document.createElement('button'), locked = bank < o.cost;
+      b.className = 'opt' + (lookOf(wardPig)[key] === o.id ? ' on' : '');
+      b.disabled = locked;
+      b.innerHTML = o.name + '<small>' + (locked ? 'Needs ' + o.cost + ' beans' : o.cost ? 'Unlocked' : 'Free') + '</small>';
+      b.addEventListener('click', () => { setLook(wardPig, key, o.id); buildWardrobe(); });
+      el.appendChild(b);
+    });
+  };
+  options($('wardHats'), HATS, 'hat');
+  options($('wardOutfits'), OUTFIT_SKINS, 'outfit');
+}
+
+function showResult() {
+  const r = G.lastResult, def = G.def, daily = r.level === DAILY, last = r.level === LEVELS.length - 1;
+  const unlocks = r.unlocked.length
+    ? '<div class="unlock">Unlocked in the wardrobe: ' + r.unlocked.join(', ') + '</div>' : '';
+  let html;
+  if (!r.won) {
+    html = '<h2>Raft popped</h2><div class="quip">' + pick(QUIPS.loseLine) + '</div><div class="tag">' + def.name + ' · made it ' +
+      Math.round(clamp(G.loc.d / G.track.L, 0, 1) * 100) + '% of the way</div>' +
+      '<div class="stats"><div><span>Time</span><b>' + fmtTime(r.time) + '</b></div>' +
+      '<div><span>Beans</span><b>' + r.beans + '</b></div></div>' + unlocks +
+      '<button class="btn" data-act="retry">Try again</button>' +
+      '<button class="btn alt" data-act="menu">Menu</button>';
+  } else {
+    let stars = '';
+    for (let s = 0; s < 3; s++) stars += s < r.stars ? '★' : '<span class="off">★</span>';
+    html = '<h2>' + (daily ? 'Daily done' : last ? 'River conquered' : 'Finished') + '</h2>' +
+      '<div class="quip">' + pick(QUIPS.winLine) + '</div>' +
+      '<div class="tag">' + (daily ? 'Daily · ' + fmtDay(def.daily) : def.name) + (r.newBest ? ' · <span class="newbest">New best</span>' : '') + '</div>' +
+      '<div class="stars">' + stars + '</div>' +
+      '<div class="stats">' +
+      '<div><span>Time ' + fmtTime(r.time) + ' (par ' + fmtTime(def.par) + ')</span><b>+' + r.timePts + '</b></div>' +
+      '<div><span>Beans × ' + r.beans + '</span><b>+' + r.beanPts + '</b></div>' +
+      '<div><span>Hearts left × ' + r.hearts + '</span><b>+' + r.heartPts + '</b></div>' +
+      '<div class="total"><span>Score</span><span>' + r.score + '</span></div>' +
+      (last ? '<div class="total"><span>Run total</span><span>' + G.runTotal + '</span></div>' : '') +
+      (daily ? '<div class="total"><span>Today\'s best</span><span>' + save.daily.score + '</span></div>' : '') +
+      '</div>' + unlocks +
+      (daily
+        ? '<button class="btn" data-act="retry">Try again</button><button class="btn alt" data-act="menu">Menu</button>'
+        : (last
+          ? '<button class="btn" data-act="again">Play again</button>'
+          : '<button class="btn" data-act="next">Next river</button>') +
+          '<div class="row"><button class="btn alt" data-act="retry">Replay</button>' +
+          '<button class="btn alt" data-act="menu">Menu</button></div>');
+  }
+  UI.resultCard.innerHTML = html;
+}
+
+UI.resultCard.addEventListener('click', e => {
+  const act = e.target.closest('[data-act]'); if (!act) return;
+  resultAction(act.dataset.act);
+});
+function resultAction(a) {
+  Sound.unlock();
+  const lvl = G.lastResult ? G.lastResult.level : 0;
+  if (a === 'retry') startLevel(lvl, lvl === 0);
+  else if (a === 'next') startLevel(lvl + 1, false);
+  else if (a === 'again') startLevel(0, true);
+  else if (a === 'menu') setState('menu');
+}
+
+function setState(s) {
+  G.state = s;
+  UI.menu.classList.toggle('hidden', s !== 'menu');
+  UI.pause.classList.toggle('hidden', s !== 'paused');
+  UI.result.classList.toggle('hidden', s !== 'result');
+  $('scrWardrobe').classList.toggle('hidden', s !== 'wardrobe');
+  if (s === 'wardrobe') buildWardrobe();
+  const inGame = s === 'playing' || s === 'paused';
+  UI.hud.classList.toggle('hidden', !inGame);
+  UI.pad.classList.toggle('hidden', s !== 'playing');
+  if (s !== 'playing') UI.hint.classList.add('hidden');
+  if (s === 'menu') { buildLevelButtons(); if (!G.track) loadLevel(0); }
+  if (s === 'result') showResult();
+  hudCache = {};
+}
+
+let hudCache = {};
+function updateHud() {
+  if (G.state !== 'playing' && G.state !== 'paused') return;
+  const set = (k, v, fn) => { if (hudCache[k] !== v) { hudCache[k] = v; fn(v); } };
+  set('hearts', G.hearts, v => {
+    let s = ''; for (let i = 0; i < MAX_HEARTS; i++) s += i < v ? '♥' : '<span class="lost">♥</span>';
+    UI.hearts.innerHTML = s;
+  });
+  set('beans', G.beans, v => (UI.beans.textContent = 'Beans ' + v));
+  set('lvl', G.level, v => (UI.lvlname.textContent = v === DAILY ? 'Daily · ' + fmtDay(G.def.daily) : (v + 1) + ' · ' + G.def.name));
+  set('time', fmtTime(G.t), v => (UI.timer.textContent = v));
+  const p = clamp(G.loc.d / G.track.L, 0, 1);
+  set('prog', Math.round(p * 400), () => {
+    UI.progFill.style.width = (p * 100) + '%';
+    UI.progRaft.style.left = (p * 100) + '%';
+  });
+  for (let i = 0; i < 4; i++) {
+    const rd = G.raft.riders[i], pb = padBtns[i];
+    // arrow shows which way this rider would push the raft right now
+    const deg = R3D.pushScreenAngle(riderAngle(i));
+    pb.arrow.style.transform = 'rotate(' + deg.toFixed(1) + 'deg)';
+    for (let s = 0; s < GAS_MAX; s++) {
+      const v = Math.round(clamp(rd.gas - s, 0, 1) * 20);
+      set('g' + i + s, v, () => (pb.gas[s].style.width = (v * 5) + '%'));
+    }
+    set('e' + i, rd.gas < 1, v => pb.el.classList.toggle('empty', v));
+  }
+}
+
+function pauseGame() { if (G.state === 'playing' && !G.ending) setState('paused'); }
+function resumeGame() { if (G.state === 'paused') { setState('playing'); last = performance.now(); } }
+
+/* =========================================================
+   Input
+   ========================================================= */
+$('btnStart').addEventListener('click', () => { Sound.unlock(); startLevel(0, true); });
+$('btnDaily').addEventListener('click', () => { Sound.unlock(); startLevel(DAILY, false); });
+$('btnWardrobe').addEventListener('click', () => setState('wardrobe'));
+$('btnWardDone').addEventListener('click', () => setState('menu'));
+$('btnPause').addEventListener('click', () => { Sound.unlock(); G.state === 'paused' ? resumeGame() : pauseGame(); });
+$('btnResume').addEventListener('click', resumeGame);
+$('btnRestart').addEventListener('click', () => startLevel(G.level, G.level === 0));
+$('btnMenu1').addEventListener('click', () => setState('menu'));
+UI.mute.addEventListener('click', () => { Sound.unlock(); Sound.setMuted(!Sound.muted); setMuteIcon(); });
+
+const DIRS = {
+  ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1],
+  ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
+};
+window.addEventListener('keydown', e => {
+  Sound.unlock();
+  const code = e.code;
+  if (G.state === 'playing') {
+    if (e.repeat) return;
+    const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code);
+    const np = ['Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'].indexOf(code);
+    if (n >= 0 || np >= 0) { toot(n >= 0 ? n : np); e.preventDefault(); return; }
+    if (DIRS[code]) { const v = R3D.keyDir(DIRS[code][0], DIRS[code][1]); autoToot(v.x, v.y); e.preventDefault(); return; }
+    if (code === 'KeyP' || code === 'Escape') { pauseGame(); return; }
+    if (code === 'KeyR') { startLevel(G.level, G.level === 0); return; }
+  } else if (G.state === 'paused') {
+    if (code === 'KeyP' || code === 'Escape' || code === 'Enter' || code === 'Space') { resumeGame(); e.preventDefault(); }
+    if (code === 'KeyR') startLevel(G.level, G.level === 0);
+  } else if (G.state === 'menu') {
+    if (code === 'Enter' || code === 'Space') { startLevel(0, true); e.preventDefault(); }
+  } else if (G.state === 'wardrobe') {
+    if (code === 'Escape' || code === 'Enter') setState('menu');
+  } else if (G.state === 'result') {
+    if (code === 'Enter' || code === 'Space') {
+      const btn = UI.resultCard.querySelector('.btn'); if (btn) resultAction(btn.dataset.act);
+      e.preventDefault();
+    }
+  }
+});
+
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  Sound.unlock();
+  if (G.state !== 'playing') return;
+  const hit = R3D.pick(e.clientX, e.clientY);
+  if (hit.rider >= 0) toot(hit.rider);   // tapped on a pig: that pig toots
+  else autoToot(hit.x, hit.y);           // tapped open water: push towards it
+});
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+window.addEventListener('blur', pauseGame);
+window.addEventListener('resize', R3D.resize);
+document.addEventListener('gesturestart', e => e.preventDefault()); // Safari pinch
+
+/* =========================================================
+   Main loop
+   ========================================================= */
+let last = performance.now(), acc = 0;
+function frame(now) {
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.1) dt = 0.1;
+  G.time += dt;
+  if (G.state === 'playing') {
+    acc += dt;
+    while (acc >= STEP) { step(STEP); acc -= STEP; if (G.state !== 'playing') break; }
+  } else {
+    acc = 0;
+    if (G.state === 'menu' && G.raft) G.raft.ang += dt * 0.6;
+  }
+  if (G.state === 'playing' || G.state === 'menu' || G.state === 'result') updateFx(dt);
+  R3D.render(dt);
+  updateHud();
+  requestAnimationFrame(frame);
+}
+
+R3D.resize();
+setMuteIcon();
+setState('menu');
+requestAnimationFrame(frame);
+
+// Hooks for automated testing
+window.TootRaft = { G, LEVELS, RIDERS, QUIPS, DAILY, HATS, OUTFIT_SKINS, save: () => save, setLook, todayKey, toot, autoToot, step, startLevel, setState, riderAngle, resultAction, buildTrack, gateOpen, R3D };
+</script>
+</body>
+</html>
