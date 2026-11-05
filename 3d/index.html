@@ -4226,11 +4226,76 @@ const Sound = {
     n.connect(f); f.connect(g); g.connect(this.master);
     n.start(t); n.stop(t + dur + 0.05);
   },
-  // Recorded clips (embedded as base64 in SFX_DATA) decoded once audio is unlocked.
+  /* Toots built from scratch, the way real ones work: a burst of separate little flaps of air,
+     each one ringing through a few low resonances. The flaps are unevenly spaced and unevenly
+     loud, and some get skipped, so no two toots match and nothing sounds like a steady tone. */
+  makeToot(o) {
+    const sr = this.ctx.sampleRate, R = Math.random, TAU = Math.PI * 2;
+    const n = Math.ceil((o.dur + 0.05) * sr), out = new Float32Array(n);
+    const res = [[o.f1, 0.0026, 1], [o.f1 * 1.85, 0.0019, 0.8], [o.f1 * 3.7, 0.0011, 0.42]]
+      .map(([f, d, a]) => ({ w: TAU * f * (0.88 + R() * 0.24) / sr, k: Math.exp(-1 / (d * sr)), a }));
+    const swellAt = 0.2 + R() * 0.5, tailLen = Math.round(0.012 * sr);
+    let t = 0.001, drift = 0, phase = 0;
+    while (t < o.dur) {
+      const p = t / o.dur;
+      drift = (drift + (R() - 0.5) * 0.16) * 0.92;
+      const hz = o.hz * (1 + o.slide * (p - 0.35)) * (1 + drift + 0.1 * Math.sin(p * 9 + phase));
+      const gap = (1 / Math.max(25, hz)) * (0.8 + R() * 0.42);
+      if (R() < o.skip * (0.4 + p)) { t += gap * (0.6 + R()); continue; }   // a skipped flap: the sputter
+      const shape = Math.min(1, t / 0.012) * (1 - Math.pow(p, 3.2) * 0.9) * (0.68 + 0.32 * Math.exp(-Math.pow((p - swellAt) * 3.4, 2)));
+      const amp = shape * (0.5 + R() * 0.65), s0 = Math.round(t * sr);
+      for (const r of res) {
+        const ph = 0.3 + R() * 0.9;
+        let e = r.a * amp;
+        for (let k = 0; k < tailLen && s0 + k < n; k++) { out[s0 + k] += e * Math.sin(ph + r.w * k); e *= r.k; }
+      }
+      let e = 0.34 * amp;                                                    // the wet slap of each flap
+      for (let k = 0; k < 90 && s0 + k < n; k++) { out[s0 + k] += e * (R() * 2 - 1); e *= 0.965; }
+      t += gap;
+    }
+    let lp = 0, dc = 0, prev = 0, peak = 1e-4;
+    const lpK = 1 - Math.exp(-TAU * o.bright / sr);
+    for (let i = 0; i < n; i++) {
+      lp += (out[i] - lp) * lpK;
+      dc = 0.995 * (dc + lp - prev); prev = lp;                              // keeps the speaker from thumping
+      out[i] = dc; if (Math.abs(dc) > peak) peak = Math.abs(dc);
+    }
+    for (let i = 0; i < n; i++) { let v = out[i] / peak; out[i] = Math.tanh(v * 1.5) / Math.tanh(1.5); }
+    for (let i = 1, f = Math.min(n, Math.round(0.012 * sr)); i <= f; i++) out[n - i] *= (i - 1) / f;
+    const buf = this.ctx.createBuffer(1, n, sr);
+    buf.getChannelData(0).set(out);
+    return { buf, gain: 0.95, start: 0 };
+  },
+  tootRecipe() {
+    const R = Math.random;
+    return { dur: 0.26 + R() * 0.4, hz: 78 + R() * 44, f1: 330 + R() * 110, slide: -0.5 + R() * 0.45, skip: 0.04 + R() * 0.1, bright: 2000 + R() * 900 };
+  },
+  makeClips() {
+    const R = Math.random;
+    this.clips = { toot: [], long: [], pop: [] };
+    // two toots right away so the first press sounds right; the rest one at a time, so the first tap never stutters
+    const longRecipe = () => ({ dur: 1.15 + R() * 1, hz: 76 + R() * 34, f1: 310 + R() * 90, slide: -0.35 + R() * 0.2, skip: 0.1 + R() * 0.08, bright: 2000 + R() * 800 });
+    const jobs = [];
+    for (let i = 0; i < 2; i++) this.clips.toot.push(this.makeToot(this.tootRecipe()));
+    for (let i = 0; i < 4; i++) jobs.push(() => this.clips.long.push(this.makeToot(longRecipe())));
+    // the raft popping: a long deflating squeal that climbs, then sputters out
+    jobs.push(() => this.clips.pop.push(this.makeToot({ dur: 1.9, hz: 88, f1: 420, slide: 1.1, skip: 0.2, bright: 3000 })));
+    for (let i = 0; i < 8; i++) jobs.push(() => this.clips.toot.push(this.makeToot(this.tootRecipe())));
+    const next = () => { const j = jobs.shift(); if (j) { j(); setTimeout(next, 40); } };
+    setTimeout(next, 40);
+  },
+  // swap in a fresh toot now and then, so a long run never repeats itself
+  freshen() {
+    if (!this.clips || this.freshening) return;
+    this.freshening = true;
+    setTimeout(() => { this.freshening = false; const L = this.clips.toot; L[Math.floor(Math.random() * L.length)] = this.makeToot(this.tootRecipe()); }, 60);
+  },
+  // Recorded clips would be decoded here if SFX_DATA held any; this build has none.
   clips: null,
   loadClips() {
     const data = window.SFX_DATA;
-    if (!data || this.clips || !this.ctx) return;
+    if (this.clips || !this.ctx) return;
+    if (!data) { this.makeClips(); return; }
     this.clips = { toot: [], long: [], pop: [] };
     const decode = (b64, list) => {
       const bin = atob(b64), bytes = new Uint8Array(bin.length);
@@ -4271,6 +4336,7 @@ const Sound = {
     // each rider has their own pitch: Pip deep, Lou squeaky
     const rate = [0.82, 1, 1.15, 1.32][i] * (0.94 + Math.random() * 0.12);
     if (!this.playClip(this.clips && this.clips.toot, rate, 0.9, 0.9)) this.synthToot(i);
+    this.freshen();
   },
   rocket() {
     if (!this.playClip(this.clips && this.clips.long, 1.25, 1, 1.1)) this.synthToot(0);
@@ -5874,7 +5940,7 @@ setState('menu');
 requestAnimationFrame(frame);
 
 // Hooks for automated testing
-window.TootRaft = { G, LEVELS, RIDERS, QUIPS, DAILY, HATS, OUTFIT_SKINS, save: () => save, setLook, todayKey, toot, autoToot, step, startLevel, setState, riderAngle, resultAction, buildTrack, gateOpen, R3D };
+window.TootRaft = { G, LEVELS, RIDERS, QUIPS, DAILY, HATS, OUTFIT_SKINS, save: () => save, setLook, todayKey, toot, autoToot, step, startLevel, setState, riderAngle, resultAction, buildTrack, gateOpen, R3D, Sound };
 </script>
 </body>
 </html>
