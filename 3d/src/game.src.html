@@ -127,6 +127,18 @@
   .opt:disabled { opacity: .45; cursor: default; }
   .unlock { background: #fff3c4; border-radius: 12px; padding: 8px 12px; margin-top: 8px; font-weight: 800; font-size: 14px; }
   .quip { font-family: ui-monospace, Menlo, monospace; font-weight: 800; font-size: 14px; color: var(--accent-dark); margin: 4px 0 -4px; }
+  /* Play with friends */
+  .link { background: #fff; border-radius: 12px; padding: 10px 12px; font: 700 13px ui-monospace, Menlo, monospace; word-break: break-all;
+    -webkit-user-select: text; user-select: text; text-align: left; }
+  .crew { display: grid; gap: 6px; margin: 14px 0 4px; text-align: left; }
+  .crew div { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border-radius: 12px; padding: 8px 12px; font-weight: 800; font-size: 14px; }
+  .crew div.wait { opacity: .5; font-weight: 700; }
+  .crew span { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  .dot { font-style: normal; padding: 2px 8px; border-radius: 10px; background: var(--c); box-shadow: 0 2px 0 var(--cd); font-size: 12px; }
+  #scrOnline .levels { grid-template-columns: repeat(2, 1fr); }
+  .rider.theirs { opacity: .35; filter: grayscale(.6); }
+  .rider.nope { animation: nope .3s; }
+  @keyframes nope { 25% { translate: -5px 0; } 75% { translate: 5px 0; } }
   .newbest { display: inline-block; background: #ffb703; color: #fff; font-weight: 900; border-radius: 10px; padding: 2px 10px; font-size: 13px; }
 
   @media (max-height: 560px) {
@@ -197,6 +209,7 @@
   </div>
   <div class="card">
     <button class="btn" id="btnStart">Start</button>
+    <button class="btn alt" id="btnFriends">Play with friends<small>Share a link · up to 4 players</small></button>
     <div class="row">
       <button class="btn alt" id="btnDaily">Daily river</button>
       <button class="btn alt" id="btnWardrobe">Wardrobe</button>
@@ -233,6 +246,23 @@
   </div>
 </section>
 
+<section id="scrOnline" class="screen hidden">
+  <div class="card">
+    <h2>Play with friends</h2>
+    <div class="tag" id="onStatus"></div>
+    <div id="onShare" class="hidden">
+      <div class="link" id="onLink"></div>
+      <button class="btn" id="btnShare">Share link</button>
+    </div>
+    <div class="crew" id="onCrew"></div>
+    <div id="onRivers" class="hidden">
+      <div class="wlabel">Pick a river to start</div>
+      <div class="levels" id="onLevels"></div>
+    </div>
+    <button class="btn alt" id="btnLeave">Leave</button>
+  </div>
+</section>
+
 <section id="scrPause" class="screen hidden">
   <div class="card">
     <h2>Paused</h2>
@@ -249,6 +279,7 @@
 </section>
 
 <script>/*__THREE__*/</script>
+<script>/*__PEER__*/</script>
 <script>
 /* No recorded clips in this build: the built-in synth toots play. */
 window.SFX_DATA = null;
@@ -670,7 +701,7 @@ function mineU(h, t) { return (h.f.hw - 30) * Math.sin(t * h.speed + h.phase); }
    Game state
    ========================================================= */
 const G = {
-  state: 'menu',     // menu | playing | paused | result
+  state: 'menu',     // menu | lobby | playing | paused | result | wardrobe
   level: 0, track: null, raft: null,
   t: 0, simTime: 0, time: 0, started: false,
   hearts: MAX_HEARTS, beans: 0, invuln: 0, ending: null, toots: 0,
@@ -708,8 +739,9 @@ function say(text, rider, force) {
   if (!force && G.quipCd > 0) return;
   G.quip = { text, rider, life: 1.9 };
   G.quipCd = 2.2;
+  emit('q', text, rider);
 }
-function flash(text) { G.flash = { text, life: 1.7 }; }
+function flash(text) { G.flash = { text, life: 1.7 }; emit('f', text); }
 
 function newRaft(T) {
   return {
@@ -720,9 +752,9 @@ function newRaft(T) {
   };
 }
 
-function loadLevel(i) {
+function loadLevel(i, dailyKey) {
   G.level = i;
-  G.def = i === DAILY ? dailyDef(todayKey()) : LEVELS[i];
+  G.def = i === DAILY ? dailyDef(dailyKey || todayKey()) : LEVELS[i];
   G.track = buildTrack(G.def);
   G.track.beans.forEach(b => (b.got = false));
   G.raft = newRaft(G.track);
@@ -737,15 +769,20 @@ function loadLevel(i) {
 
 // Stratos analytics (see CLAUDE.md, "Analytics before launch")
 function track(name, details) { try { var S = window.Stratos || parent.Stratos; if (S) S.track(name, details); } catch (e) {} }
-function riverInfo(extra) { return Object.assign({ level: G.level === DAILY ? 'daily' : G.level + 1, river: G.def.name }, extra); }
+function riverInfo(extra) { return Object.assign({ level: G.level === DAILY ? 'daily' : G.level + 1, river: G.def.name }, online() ? { players: Net.n } : null, extra); }
 
 function startLevel(i, freshRun) {
   if (freshRun) G.runTotal = 0;
   loadLevel(i);
   track('level_start', riverInfo());
   setState('playing');
-  UI.hint.textContent = i === 0
-    ? 'Pip is at the back. Press 1 or tap Pip to toot forward.'
+  hostStarted();
+  showHint();
+}
+function showHint() {
+  const i = G.level;
+  UI.hint.textContent = online() && Net.n > 1 ? onlineHint()
+    : i === 0 ? 'Pip is at the back. Press 1 or tap Pip to toot forward.'
     : i === DAILY ? 'Daily river for ' + fmtDay(G.def.daily) + '. Same course for everyone today.'
     : G.def.name + ': watch the spin and time the gates.';
   UI.hint.classList.remove('hidden');
@@ -762,8 +799,7 @@ function toot(i) {
   const r = G.raft, rd = r.riders[i];
   // every press farts: a rider out of gas squeezes out a weak little squeaker instead
   const weak = rd.gas < 1;
-  if (weak) rd.fizz = 0.35; else rd.gas -= 1;
-  rd.anim = 1;
+  if (!weak) rd.gas -= 1;
   // the same pig three times in quick succession = ROCKET TOOT
   if (!weak && G.combo.rider === i && G.simTime - G.combo.t < 0.9) G.combo.n++;
   else G.combo.n = weak ? 0 : 1;
@@ -772,11 +808,42 @@ function toot(i) {
   if (rocket) G.combo.n = 0;
   // now and then a toot comes out as a MEGA TOOT: bigger push, bigger cloud, longer sound
   const mega = !weak && !rocket && G.toots > 4 && Math.random() < 0.05;
-  const power = weak ? 0.35 : rocket ? 1.9 : mega ? 1.4 : 1;
+  const kind = weak ? TOOT_WEAK : rocket ? TOOT_ROCKET : mega ? TOOT_MEGA : TOOT_NORMAL;
+  const power = TOOT_POWER[kind];
   const a = riderAngle(i), ux = Math.cos(a), uy = Math.sin(a);
   r.vx -= ux * TOOT_IMPULSE * power; r.vy -= uy * TOOT_IMPULSE * power;
   r.w += (Math.random() - 0.5) * (mega ? 1.4 : 0.5);
+  G.started = true; G.toots++;
+  tootFx(i, kind);
+
+  // jokes
+  G.recent.push(G.simTime);
+  while (G.recent.length && G.simTime - G.recent[0] > 1.3) G.recent.shift();
+  if (rocket) {
+    G.flashCd = 3;
+    flash('ROCKET TOOT!'); say(pick(QUIPS.rocket), i, true);
+  } else if (mega) {
+    flash('MEGA TOOT!'); say(pick(QUIPS.mega), i, true);
+  } else {
+    if (weak && Math.random() < 0.5) say(pick(QUIPS.empty), i);
+    else if (G.recent.length >= 4 && G.flashCd <= 0) { flash(pick(QUIPS.spam)); G.flashCd = 7; G.recent.length = 0; }
+    else if (G.toots === 1) say(pick(QUIPS.start), i, true);
+    else if (Math.random() < 0.16) say(pick(QUIPS.rider[i]), i);
+  }
+  return true;
+}
+
+// What everyone sees and hears when a pig toots (friends online replay this from the host)
+const TOOT_WEAK = 0, TOOT_NORMAL = 1, TOOT_ROCKET = 2, TOOT_MEGA = 3;
+const TOOT_POWER = [0.35, 1, 1.9, 1.4];
+function tootFx(i, kind) {
+  emit('t', i, kind);
+  const r = G.raft, rd = r.riders[i], power = TOOT_POWER[kind];
+  const weak = kind === TOOT_WEAK, rocket = kind === TOOT_ROCKET, mega = kind === TOOT_MEGA;
+  if (weak) rd.fizz = 0.35;
+  rd.anim = 1;
   // gas cloud from the rider's rear end
+  const a = riderAngle(i), ux = Math.cos(a), uy = Math.sin(a);
   const ox = r.x + ux * (RAFT_R + 4), oy = r.y + uy * (RAFT_R + 4) - 10;
   for (let k = 0; k < (rocket ? 34 : mega ? 30 : weak ? 4 : 18); k++) {
     const spread = (Math.random() - 0.5) * (mega ? 1.4 : 0.9), sp = (70 + Math.random() * 190) * power;
@@ -784,42 +851,29 @@ function toot(i) {
     G.parts.push({ kind: 'gas', x: ox, y: oy, vx: Math.cos(ca) * sp, vy: Math.sin(ca) * sp,
       r: (6 + Math.random() * 6) * power, gr: (26 + Math.random() * 20) * power, life: 0.9 + Math.random() * 0.5, max: 1.3, rocket });
   }
-  G.started = true; G.toots++;
+  if (rocket) { Sound.rocket(); G.shake = 0.35; }
+  else if (mega) { Sound.mega(); G.shake = 0.3; }
+  else if (weak) Sound.squeak(i); else Sound.toot(i);
   if (G.toots >= 3) UI.hint.style.opacity = 0;
-
-  // jokes
-  G.recent.push(G.simTime);
-  while (G.recent.length && G.simTime - G.recent[0] > 1.3) G.recent.shift();
-  if (rocket) {
-    Sound.rocket(); G.shake = 0.35; G.flashCd = 3;
-    flash('ROCKET TOOT!'); say(pick(QUIPS.rocket), i, true);
-  } else if (mega) {
-    Sound.mega(); G.shake = 0.3;
-    flash('MEGA TOOT!'); say(pick(QUIPS.mega), i, true);
-  } else {
-    if (weak) Sound.squeak(i); else Sound.toot(i);
-    if (weak && Math.random() < 0.5) say(pick(QUIPS.empty), i);
-    else if (G.recent.length >= 4 && G.flashCd <= 0) { flash(pick(QUIPS.spam)); G.flashCd = 7; G.recent.length = 0; }
-    else if (G.toots === 1) say(pick(QUIPS.start), i, true);
-    else if (Math.random() < 0.16) say(pick(QUIPS.rider[i]), i);
-  }
   flashPad(i);
-  return true;
 }
 
 // Toot whichever rider pushes closest to the wanted direction.
-function autoToot(dx, dy) {
+// Online, only the pigs of player p (default: this device's player) can answer.
+function autoToot(dx, dy, p) {
   if (G.state !== 'playing' || G.ending) return;
   const len = Math.hypot(dx, dy); if (len < 1e-6) return;
   dx /= len; dy /= len;
   // prefer a well-aimed rider with gas; otherwise the best-aimed one does a weak squeaker
-  let best = 0, bestDot = -2, full = -1, fullDot = 0.3;
+  let best = -1, bestDot = -2, full = -1, fullDot = 0.3;
+  if (p === undefined) p = Net.me;
   for (let i = 0; i < 4; i++) {
+    if (online() && owner(i) !== p) continue;
     const a = riderAngle(i), dot = -(Math.cos(a) * dx + Math.sin(a) * dy);
     if (dot > bestDot) { bestDot = dot; best = i; }
     if (G.raft.riders[i].gas >= 1 && dot > fullDot) { fullDot = dot; full = i; }
   }
-  toot(full >= 0 ? full : best);
+  if (full >= 0 || best >= 0) toot(full >= 0 ? full : best);
 }
 
 function hurt(nx, ny) {
@@ -830,8 +884,8 @@ function hurt(nx, ny) {
   burst(r.x - nx * RAFT_R, r.y - ny * RAFT_R, 14, ['#ffffff', '#ff6b5a', '#ffd54a']);
   if (G.hearts <= 0) {
     G.ending = { type: 'pop', t: 0 };
-    Sound.pop(); flash('TOO MUCH PRESSURE!'); G.quip = null;
-  } else { Sound.hurt(); say(pick(QUIPS.hurt), Math.floor(Math.random() * 4), true); }
+    sfx('pop'); flash('TOO MUCH PRESSURE!'); G.quip = null;
+  } else { sfx('hurt'); say(pick(QUIPS.hurt), Math.floor(Math.random() * 4), true); }
 }
 
 function hit(nx, ny, harmful, e) {
@@ -839,7 +893,7 @@ function hit(nx, ny, harmful, e) {
   if (vn < 0) {
     r.vx -= (1 + e) * vn * nx; r.vy -= (1 + e) * vn * ny;
     r.w += (Math.random() - 0.5) * Math.min(2, -vn / 80);
-    if (-vn > 40 && !harmful) { Sound.bump(); splash(r.x - nx * RAFT_R, r.y - ny * RAFT_R, 6); }
+    if (-vn > 40 && !harmful) { sfx('bump'); splash(r.x - nx * RAFT_R, r.y - ny * RAFT_R, 6); }
   }
   if (harmful) hurt(nx, ny);
 }
@@ -934,17 +988,17 @@ function applyWhirls(dt) {
 
 function collectBeans() {
   const r = G.raft;
-  for (const b of G.track.beans) {
-    if (b.got) continue;
+  G.track.beans.forEach((b, j) => {
+    if (b.got) return;
     const dx = r.x - b.x, dy = r.y - b.y;
     if (dx * dx + dy * dy < (RAFT_R + 12) * (RAFT_R + 12)) {
-      b.got = true; G.beans++;
+      b.got = true; G.beans++; emit('g', j);
       r.riders.forEach(rd => (rd.gas = Math.min(GAS_MAX, rd.gas + 1)));
       burst(b.x, b.y, 8, ['#ffb347', '#ffd54a', '#ffffff']);
-      Sound.bean();
+      sfx('bean');
       if (Math.random() < 0.35) say(pick(QUIPS.bean), Math.floor(Math.random() * 4));
     }
-  }
+  });
 }
 
 function step(dt) {
@@ -995,7 +1049,7 @@ function step(dt) {
 
   if (G.loc.d >= T.L) {
     G.ending = { type: 'win', t: 0 };
-    Sound.win(); flash('SMELLS LIKE VICTORY!'); G.quip = null;
+    sfx('win'); flash('SMELLS LIKE VICTORY!'); G.quip = null;
     for (let i = 0; i < 40; i++) burst(r.x, r.y, 1, ['#ff6b5a', '#ffd54a', '#7fd65f', '#b39cff', '#3cc3f2'], 260);
   }
 
@@ -1028,6 +1082,7 @@ function updateFx(dt) {
 }
 
 function burst(x, y, n, colors, speed) {
+  emit('b', Math.round(x), Math.round(y), n, colors, speed);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * 6.283, s = (speed || 160) * (0.4 + Math.random() * 0.8);
     G.parts.push({ kind: 'conf', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: 3 + Math.random() * 3,
@@ -1035,6 +1090,7 @@ function burst(x, y, n, colors, speed) {
   }
 }
 function splash(x, y, n) {
+  emit('p', Math.round(x), Math.round(y), n);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * 6.283, s = 40 + Math.random() * 80;
     G.parts.push({ kind: 'drop', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, z: 0, vz: 150 + Math.random() * 120,
@@ -1078,6 +1134,7 @@ function finishLevel(won) {
     : { time: Math.round(G.t), beans: G.beans }));
   G.lastResult = res;
   setState('result');
+  hostResult(res);
 }
 
 /*__RENDERER__*/
@@ -1100,7 +1157,7 @@ const padBtns = RIDERS.map((R, i) => {
   b.setAttribute('aria-label', 'Toot ' + R.name);
   b.innerHTML = '<div class="top"><span class="num">' + R.key + '</span><span class="arrow">' + ARROW_SVG +
     '</span></div><span class="nm">' + R.name + '</span><span class="gas"><i><b></b></i><i><b></b></i><i><b></b></i></span>';
-  b.addEventListener('pointerdown', e => { e.preventDefault(); Sound.unlock(); toot(i); });
+  b.addEventListener('pointerdown', e => { e.preventDefault(); Sound.unlock(); requestToot(i); });
   UI.pad.appendChild(b);
   return { el: b, arrow: b.querySelector('.arrow'), gas: [...b.querySelectorAll('.gas b')] };
 });
@@ -1179,8 +1236,9 @@ function showResult() {
       Math.round(clamp(G.loc.d / G.track.L, 0, 1) * 100) + '% of the way</div>' +
       '<div class="stats"><div><span>Time</span><b>' + fmtTime(r.time) + '</b></div>' +
       '<div><span>Beans</span><b>' + r.beans + '</b></div></div>' + unlocks +
-      '<button class="btn" data-act="retry">Try again</button>' +
-      '<button class="btn alt" data-act="menu">Menu</button>';
+      (online() ? onlineButtons(r)
+        : '<button class="btn" data-act="retry">Try again</button>' +
+          '<button class="btn alt" data-act="menu">Menu</button>');
   } else {
     let stars = '';
     for (let s = 0; s < 3; s++) stars += s < r.stars ? '★' : '<span class="off">★</span>';
@@ -1193,10 +1251,10 @@ function showResult() {
       '<div><span>Beans × ' + r.beans + '</span><b>+' + r.beanPts + '</b></div>' +
       '<div><span>Hearts left × ' + r.hearts + '</span><b>+' + r.heartPts + '</b></div>' +
       '<div class="total"><span>Score</span><span>' + r.score + '</span></div>' +
-      (last ? '<div class="total"><span>Run total</span><span>' + G.runTotal + '</span></div>' : '') +
-      (daily ? '<div class="total"><span>Today\'s best</span><span>' + save.daily.score + '</span></div>' : '') +
+      (last && !online() ? '<div class="total"><span>Run total</span><span>' + G.runTotal + '</span></div>' : '') +
+      (daily && !online() ? '<div class="total"><span>Today\'s best</span><span>' + save.daily.score + '</span></div>' : '') +
       '</div>' + unlocks +
-      (daily
+      (online() ? onlineButtons(r) : daily
         ? '<button class="btn" data-act="retry">Try again</button><button class="btn alt" data-act="menu">Menu</button>'
         : (last
           ? '<button class="btn" data-act="again">Play again</button>'
@@ -1206,6 +1264,13 @@ function showResult() {
   }
   UI.resultCard.innerHTML = html;
 }
+function onlineButtons(r) {
+  if (Net.mode === 'guest') return '<div class="tag">The host picks what comes next.</div><button class="btn alt" data-act="leave">Leave raft</button>';
+  const next = r.won && r.level !== DAILY && r.level < LEVELS.length - 1;
+  return (next ? '<button class="btn" data-act="next">Next river</button>' : '') +
+    '<div class="row"><button class="btn' + (next ? ' alt' : '') + '" data-act="retry">' + (r.won ? 'Replay' : 'Try again') + '</button>' +
+    '<button class="btn alt" data-act="lobby">Lobby</button></div>';
+}
 
 UI.resultCard.addEventListener('click', e => {
   const act = e.target.closest('[data-act]'); if (!act) return;
@@ -1213,11 +1278,14 @@ UI.resultCard.addEventListener('click', e => {
 });
 function resultAction(a) {
   Sound.unlock();
+  if (Net.mode === 'guest' && a !== 'leave') return;
   const lvl = G.lastResult ? G.lastResult.level : 0;
   if (a === 'retry') startLevel(lvl, lvl === 0);
   else if (a === 'next') startLevel(lvl + 1, false);
   else if (a === 'again') startLevel(0, true);
   else if (a === 'menu') setState('menu');
+  else if (a === 'lobby') toLobby();
+  else if (a === 'leave') leaveRoom();
 }
 
 function setState(s) {
@@ -1226,14 +1294,21 @@ function setState(s) {
   UI.pause.classList.toggle('hidden', s !== 'paused');
   UI.result.classList.toggle('hidden', s !== 'result');
   $('scrWardrobe').classList.toggle('hidden', s !== 'wardrobe');
+  $('scrOnline').classList.toggle('hidden', s !== 'lobby');
   if (s === 'wardrobe') buildWardrobe();
+  if (s === 'paused') {
+    $('btnRestart').classList.toggle('hidden', Net.mode === 'guest');
+    $('btnMenu1').textContent = Net.mode === 'guest' ? 'Leave raft' : Net.mode === 'host' ? 'Lobby' : 'Menu';
+  }
   const inGame = s === 'playing' || s === 'paused';
   UI.hud.classList.toggle('hidden', !inGame);
   UI.pad.classList.toggle('hidden', s !== 'playing');
   if (s !== 'playing') UI.hint.classList.add('hidden');
-  if (s === 'menu') { buildLevelButtons(); if (!G.track) loadLevel(0); }
+  if (s === 'menu') buildLevelButtons();
+  if ((s === 'menu' || s === 'lobby') && !G.track) loadLevel(0);
   if (s === 'result') showResult();
   hudCache = {};
+  if (s === 'lobby') lobbyRender();
 }
 
 let hudCache = {};
@@ -1265,8 +1340,18 @@ function updateHud() {
   }
 }
 
-function pauseGame() { if (G.state === 'playing' && !G.ending) setState('paused'); }
-function resumeGame() { if (G.state === 'paused') { setState('playing'); last = performance.now(); } }
+// Online, a pause stops the raft for everyone, and anyone can resume it.
+function pauseGame() {
+  if (Net.mode === 'guest') { if (G.state === 'playing' && !G.ending) netSend({ k: 'pause' }); return; }
+  if (G.state === 'playing' && !G.ending) { setState('paused'); hostState(); }
+}
+function resumeGame() {
+  if (G.state !== 'paused') return;
+  if (Net.mode === 'guest') { netSend({ k: 'resume' }); return; }
+  setState('playing'); last = performance.now(); hostState();
+}
+
+/*__ONLINE__*/
 
 /* =========================================================
    Input
@@ -1277,8 +1362,8 @@ $('btnWardrobe').addEventListener('click', () => setState('wardrobe'));
 $('btnWardDone').addEventListener('click', () => setState('menu'));
 $('btnPause').addEventListener('click', () => { Sound.unlock(); G.state === 'paused' ? resumeGame() : pauseGame(); });
 $('btnResume').addEventListener('click', resumeGame);
-$('btnRestart').addEventListener('click', () => startLevel(G.level, G.level === 0));
-$('btnMenu1').addEventListener('click', () => setState('menu'));
+$('btnRestart').addEventListener('click', () => { if (Net.mode !== 'guest') startLevel(G.level, G.level === 0); });
+$('btnMenu1').addEventListener('click', () => Net.mode === 'host' ? toLobby() : Net.mode === 'guest' ? leaveRoom() : setState('menu'));
 UI.mute.addEventListener('click', () => { Sound.unlock(); Sound.setMuted(!Sound.muted); setMuteIcon(); });
 
 const DIRS = {
@@ -1292,18 +1377,18 @@ window.addEventListener('keydown', e => {
     if (e.repeat) return;
     const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code);
     const np = ['Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'].indexOf(code);
-    if (n >= 0 || np >= 0) { toot(n >= 0 ? n : np); e.preventDefault(); return; }
-    if (DIRS[code]) { const v = R3D.keyDir(DIRS[code][0], DIRS[code][1]); autoToot(v.x, v.y); e.preventDefault(); return; }
+    if (n >= 0 || np >= 0) { requestToot(n >= 0 ? n : np); e.preventDefault(); return; }
+    if (DIRS[code]) { const v = R3D.keyDir(DIRS[code][0], DIRS[code][1]); requestDir(v.x, v.y); e.preventDefault(); return; }
     if (code === 'KeyP' || code === 'Escape') { pauseGame(); return; }
-    if (code === 'KeyR') { startLevel(G.level, G.level === 0); return; }
+    if (code === 'KeyR' && Net.mode !== 'guest') { startLevel(G.level, G.level === 0); return; }
   } else if (G.state === 'paused') {
     if (code === 'KeyP' || code === 'Escape' || code === 'Enter' || code === 'Space') { resumeGame(); e.preventDefault(); }
-    if (code === 'KeyR') startLevel(G.level, G.level === 0);
+    if (code === 'KeyR' && Net.mode !== 'guest') startLevel(G.level, G.level === 0);
   } else if (G.state === 'menu') {
     if (code === 'Enter' || code === 'Space') { startLevel(0, true); e.preventDefault(); }
   } else if (G.state === 'wardrobe') {
     if (code === 'Escape' || code === 'Enter') setState('menu');
-  } else if (G.state === 'result') {
+  } else if (G.state === 'result' && Net.mode !== 'guest') {
     if (code === 'Enter' || code === 'Space') {
       const btn = UI.resultCard.querySelector('.btn'); if (btn) resultAction(btn.dataset.act);
       e.preventDefault();
@@ -1316,12 +1401,13 @@ canvas.addEventListener('pointerdown', e => {
   Sound.unlock();
   if (G.state !== 'playing') return;
   const hit = R3D.pick(e.clientX, e.clientY);
-  if (hit.rider >= 0) toot(hit.rider);   // tapped on a pig: that pig toots
-  else autoToot(hit.x, hit.y);           // tapped open water: push towards it
+  if (hit.rider >= 0) requestToot(hit.rider);   // tapped on a pig: that pig toots
+  else requestDir(hit.x, hit.y);               // tapped open water: push towards it
 });
 
-document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
-window.addEventListener('blur', pauseGame);
+// Online, a friend switching apps does not stop the raft; the host's game stops when it is hidden, so it pauses for all.
+document.addEventListener('visibilitychange', () => { if (document.hidden && Net.mode !== 'guest') pauseGame(); });
+window.addEventListener('blur', () => { if (!online()) pauseGame(); });
 window.addEventListener('resize', R3D.resize);
 document.addEventListener('gesturestart', e => e.preventDefault()); // Safari pinch
 
@@ -1333,14 +1419,16 @@ function frame(now) {
   let dt = (now - last) / 1000; last = now;
   if (dt > 0.1) dt = 0.1;
   G.time += dt;
-  if (G.state === 'playing') {
+  if (G.state === 'playing' && Net.mode === 'guest') guestStep(dt);
+  else if (G.state === 'playing') {
     acc += dt;
     while (acc >= STEP) { step(STEP); acc -= STEP; if (G.state !== 'playing') break; }
+    netTick(dt);
   } else {
     acc = 0;
-    if (G.state === 'menu' && G.raft) G.raft.ang += dt * 0.6;
+    if ((G.state === 'menu' || G.state === 'lobby') && G.raft) G.raft.ang += dt * 0.6;
   }
-  if (G.state === 'playing' || G.state === 'menu' || G.state === 'result') updateFx(dt);
+  if (G.state === 'playing' || G.state === 'menu' || G.state === 'lobby' || G.state === 'result') updateFx(dt);
   R3D.render(dt);
   updateHud();
   requestAnimationFrame(frame);
@@ -1350,9 +1438,11 @@ R3D.resize();
 setMuteIcon();
 setState('menu');
 requestAnimationFrame(frame);
+// Opened from a friend's link: hop straight onto their raft
+if (roomFromUrl() && $('btnFriends').className.indexOf('hidden') < 0) joinRoom(roomFromUrl());
 
 // Hooks for automated testing
-window.TootRaft = { G, LEVELS, RIDERS, QUIPS, DAILY, HATS, OUTFIT_SKINS, save: () => save, setLook, todayKey, toot, autoToot, step, startLevel, setState, riderAngle, resultAction, buildTrack, gateOpen, R3D, Sound };
+window.TootRaft = { G, Net, hostRoom, joinRoom, leaveRoom, requestToot, requestDir, LEVELS, RIDERS, QUIPS, DAILY, HATS, OUTFIT_SKINS, save: () => save, setLook, todayKey, toot, autoToot, step, startLevel, setState, riderAngle, resultAction, buildTrack, gateOpen, R3D, Sound };
 </script>
 </body>
 </html>

@@ -18,6 +18,11 @@ Open `index.html` in any browser (Safari, Chrome, phone). No install, no server.
 - **Rivers 1 to 3:** Lazy Creek, Spiky Bends, Gas Gauntlet
 - **Daily river:** a new course every day
 - **Wardrobe:** lifetime beans unlock hats and outfits per pig
+- **Play with friends (3D build):** tap Play with friends, send the link, up to 4 players share the raft and each one toots only their own pigs. The host picks the river. Friends who open the link land straight on the raft.
+
+## How online play works
+
+The host's game runs the river and sends the raft to everyone 30 times a second; friends send their toots back. Browsers connect directly (WebRTC, through the PeerJS library bundled into the file). The free PeerJS server at 0.peerjs.com only introduces the browsers, and PeerJS's free relay helps when a network blocks a direct link. Solo play never uses the network. If the PeerJS server is down, online play shows "Could not reach the online server" and solo still works.
 
 ## Note
 
