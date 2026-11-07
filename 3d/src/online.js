@@ -66,7 +66,9 @@ function netReset() {
   if (peer) setTimeout(() => { try { peer.destroy(); } catch (e) {} }, 150);   // let the goodbye go out first
   padOwners();
 }
+let retryCode = '';   // a friend whose join failed can try the same link again
 function netFail(msg) {
+  retryCode = Net.mode === 'guest' ? Net.code : '';
   netReset();
   Net.err = msg;
   setState('lobby');
@@ -189,7 +191,7 @@ function joinRoom(code) {
   try { peer = makePeer(); } catch (e) { return netFail('Online play does not work in this browser.'); }
   Net.peer = peer;
   const lost = 'Could not find that raft. It may have closed. Ask your friend for a fresh link.';
-  const timer = setTimeout(() => { if (Net.peer === peer && !Net.joined) netFail(lost); }, 15000);
+  const timer = setTimeout(() => { if (Net.peer === peer && !Net.joined) netFail(lost); }, 25000);
   peer.on('open', () => {
     if (Net.peer !== peer) return;
     const c = peer.connect(ROOM_PREFIX + code, { reliable: true, serialization: 'json', metadata: { name: myName() } });
@@ -368,6 +370,7 @@ function lobbyRender() {
     add('Daily river', fmtDay(todayKey()), () => startLevel(DAILY, false));
   }
   $('btnLeave').textContent = err || Net.mode === 'solo' ? 'Back to menu' : 'Leave';
+  $('btnRetry').classList.toggle('hidden', !(err && retryCode));
 }
 // Friends' pigs are dimmed and show whose they are
 function padOwners() {
@@ -395,6 +398,7 @@ function onlineHint() {
 
 $('btnFriends').addEventListener('click', () => { Sound.unlock(); hostRoom(); });
 $('btnLeave').addEventListener('click', leaveRoom);
+$('btnRetry').addEventListener('click', () => { if (retryCode) joinRoom(retryCode); });
 $('onName').addEventListener('input', e => {
   save.name = cleanName(e.target.value); writeSave();
   if (Net.mode === 'host') rosterChanged(0);
