@@ -376,6 +376,12 @@ function padOwners() {
     pb.el.classList.toggle('theirs', !mine(i));
     pb.nm.textContent = mine(i) ? RIDERS[i].name : RIDERS[i].name + ' · ' + nameOf(owner(i));
   });
+  // name tags over the pigs once friends are on board
+  if (R3D.setBadges) R3D.setBadges(online() && Net.n > 1 ? RIDERS.map((R, i) => badgeName(owner(i))) : null);
+}
+function badgeName(p) {
+  const n = p === Net.me && !myName() ? 'You' : nameOf(p);
+  return n.length > 10 ? n.slice(0, 9) + '…' : n;
 }
 function nudgePad(i) {
   const el = padBtns[i].el;
@@ -392,7 +398,7 @@ $('btnLeave').addEventListener('click', leaveRoom);
 $('onName').addEventListener('input', e => {
   save.name = cleanName(e.target.value); writeSave();
   if (Net.mode === 'host') rosterChanged(0);
-  else if (Net.mode === 'guest') { netSend({ k: 'name', name: myName() }); lobbyRender(); }
+  else if (Net.mode === 'guest') { netSend({ k: 'name', name: myName() }); padOwners(); lobbyRender(); }
 });
 $('onName').addEventListener('change', e => { e.target.value = myName(); });
 $('onName').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });

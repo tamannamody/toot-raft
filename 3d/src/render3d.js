@@ -503,7 +503,48 @@ const R3D = (() => {
       g.fillStyle = '#1f2a44'; g.font = '900 38px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(RIDERS[i].key, 32, 34);
     });
   }
-  const badges = RIDERS.map((_, i) => new THREE.SpriteMaterial({ map: badgeTexture(i), depthTest: false, transparent: true }));
+  const badgeTex = RIDERS.map((_, i) => badgeTexture(i));
+  const badges = RIDERS.map((_, i) => new THREE.SpriteMaterial({ map: badgeTex[i], depthTest: false, transparent: true }));
+  const badgeSprites = [];
+  // Online: a name tag (number + player's name) instead of the plain number
+  function nameTexture(i, name) {
+    const H = 64, font = '800 30px system-ui, sans-serif';
+    const meas = document.createElement('canvas').getContext('2d'); meas.font = font;
+    const tw = Math.ceil(meas.measureText(name).width), W = Math.min(512, H + tw + 22);
+    const tex = canvasTex(W, H, g => {
+      const pill = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fill(); };
+      g.fillStyle = RIDERS[i].dark; pill(0, 2, W, H - 4, (H - 4) / 2);
+      g.fillStyle = '#fffaf0'; pill(4, 6, W - 8, H - 12, (H - 12) / 2);
+      g.fillStyle = RIDERS[i].color; g.beginPath(); g.arc(32, 32, 24, 0, TAU); g.fill();
+      g.fillStyle = '#1f2a44'; g.textBaseline = 'middle';
+      g.font = '900 32px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(RIDERS[i].key, 32, 34);
+      g.font = font; g.textAlign = 'left'; g.fillText(name, H + 2, 34, W - H - 14);
+    });
+    tex.aspect = W / H;
+    return tex;
+  }
+  let badgeKey = '', named = false;
+  const tagPos = new THREE.Vector3();
+  // Name tags are wide, so stack them: the further a pig is from the camera, the higher its tag
+  function stackTags() {
+    if (!named) return;
+    const d = badgeSprites.map((sp, i) => { sp.getWorldPosition(tagPos); return { i, d: tagPos.distanceToSquared(camera.position) }; });
+    d.sort((a, b) => a.d - b.d).forEach((e, rank) => { badgeSprites[e.i].position.y = 56 + rank * 13; });
+  }
+  function setBadges(labels) {
+    const key = JSON.stringify(labels || []);
+    if (key === badgeKey) return;
+    badgeKey = key; named = !!(labels && labels.length);
+    badgeSprites.forEach((sp, i) => {
+      const m = sp.material, name = labels && labels[i];
+      if (m.map !== badgeTex[i]) m.map.dispose();
+      m.map = name ? nameTexture(i, name) : badgeTex[i];
+      m.needsUpdate = true;
+      const h = name ? 17 : 19;
+      sp.scale.set(h * (name ? m.map.aspect : 1), h, 1);
+      sp.position.y = 56;
+    });
+  }
   (function buildRaft() {
     const m = new Mesher(), ringR = RAFT_R - 7;
     const flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
@@ -520,6 +561,7 @@ const R3D = (() => {
       holder.position.set(Math.cos(a) * RIDER_DIST, 3.5, Math.sin(a) * RIDER_DIST);
       holder.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));   // bottom out, face in
       const badge = new THREE.Sprite(badges[i]); badge.scale.set(19, 19, 1); badge.position.set(Math.cos(a) * RIDER_DIST, 56, Math.sin(a) * RIDER_DIST); badge.renderOrder = 20;
+      badgeSprites[i] = badge;
       raft.add(holder, badge);
       riderViews[i] = { holder, pig: null };
     });
@@ -736,6 +778,7 @@ const R3D = (() => {
     updateParts();
     updateOverlays();
     governor(dt);
+    stackTags();
     renderer.render(scene, camera);
   }
 
@@ -759,5 +802,5 @@ const R3D = (() => {
   }
 
   function riderScreen(i) { return project(riderPoint(i, 22)); }
-  return { riderScreen, buildLevel, render, resize, pick, keyDir, pushScreenAngle, pigPreview, refreshLooks, get quality() { return quality; }, get info() { return renderer ? renderer.info.render : null; } };
+  return { setBadges, riderScreen, buildLevel, render, resize, pick, keyDir, pushScreenAngle, pigPreview, refreshLooks, get quality() { return quality; }, get info() { return renderer ? renderer.info.render : null; } };
 })();
