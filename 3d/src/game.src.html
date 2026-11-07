@@ -130,6 +130,11 @@
   /* Play with friends */
   .link { background: #fff; border-radius: 12px; padding: 10px 12px; font: 700 13px ui-monospace, Menlo, monospace; word-break: break-all;
     -webkit-user-select: text; user-select: text; text-align: left; }
+  .namebox { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-weight: 900; font-size: 14px; text-align: left; white-space: nowrap; }
+  .namebox input { flex: 1; min-width: 0; border: 3px solid rgba(31,42,68,.15); border-radius: 12px; padding: 9px 12px;
+    font: inherit; font-size: 16px; font-weight: 800; color: var(--ink); background: #fff; -webkit-user-select: text; user-select: text; touch-action: auto; }
+  .namebox input:focus { outline: none; border-color: var(--accent); }
+  .rider .nm { max-width: 100%; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .crew { display: grid; gap: 6px; margin: 14px 0 4px; text-align: left; }
   .crew div { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border-radius: 12px; padding: 8px 12px; font-weight: 800; font-size: 14px; }
   .crew div.wait { opacity: .5; font-weight: 700; }
@@ -254,6 +259,7 @@
       <div class="link" id="onLink"></div>
       <button class="btn" id="btnShare">Share link</button>
     </div>
+    <label class="namebox">Your name <input id="onName" maxlength="14" placeholder="Type your name" autocomplete="nickname" enterkeyhint="done"></label>
     <div class="crew" id="onCrew"></div>
     <div id="onRivers" class="hidden">
       <div class="wlabel">Pick a river to start</div>
@@ -1159,7 +1165,7 @@ const padBtns = RIDERS.map((R, i) => {
     '</span></div><span class="nm">' + R.name + '</span><span class="gas"><i><b></b></i><i><b></b></i><i><b></b></i></span>';
   b.addEventListener('pointerdown', e => { e.preventDefault(); Sound.unlock(); requestToot(i); });
   UI.pad.appendChild(b);
-  return { el: b, arrow: b.querySelector('.arrow'), gas: [...b.querySelectorAll('.gas b')] };
+  return { el: b, nm: b.querySelector('.nm'), arrow: b.querySelector('.arrow'), gas: [...b.querySelectorAll('.gas b')] };
 });
 function flashPad(i) {
   const el = padBtns[i].el; el.classList.add('pressed');

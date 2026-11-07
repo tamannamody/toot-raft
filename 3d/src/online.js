@@ -18,6 +18,7 @@ const Net = {
   host: null,       // guest: the connection to the host
   joined: false,
   me: 0, n: 1,      // my player number, players on the raft
+  names: [],        // player names, by player number
   code: '', out: [], snapAcc: 0, lastSeen: 0,
   status: '', err: '',
 };
@@ -29,6 +30,8 @@ const mine = i => !online() || owner(i) === Net.me;
 function emit(...a) { if (Net.mode === 'host') Net.out.push(a); }
 function sfx(name, arg) { Sound[name](arg); emit('s', name, arg); }
 
+function cleanName(v) { return String(v || '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 14); }
+function myName() { return cleanName(save.name); }
 function roomCode() {
   const A = 'abcdefghjkmnpqrstuvwxyz23456789';
   let s = ''; for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)];
@@ -59,7 +62,7 @@ function netReset() {
   if (Net.mode === 'host') broadcast({ k: 'bye' });
   const peer = Net.peer;
   Net.peer = null; Net.host = null; Net.conns = []; Net.joined = false;
-  Net.mode = 'solo'; Net.me = 0; Net.n = 1; Net.out = []; Net.snapAcc = 0; Net.err = ''; Net.status = '';
+  Net.mode = 'solo'; Net.me = 0; Net.n = 1; Net.names = []; Net.out = []; Net.snapAcc = 0; Net.err = ''; Net.status = '';
   if (peer) setTimeout(() => { try { peer.destroy(); } catch (e) {} }, 150);   // let the goodbye go out first
   padOwners();
 }
@@ -102,8 +105,9 @@ function hostAccept(c) {
     if (Net.mode !== 'host') return c.close();
     if (Net.conns.length >= MAX_PLAYERS - 1) { safeSend(c, { k: 'full' }); setTimeout(() => c.close(), 500); return; }
     c.seen = performance.now();
+    c.name = cleanName(c.metadata && c.metadata.name);
     Net.conns.push(c);
-    rosterChanged(1);
+    rosterChanged(1, c.name);
     // a river is already going: bring them straight onto the raft
     if (G.state === 'playing' || G.state === 'paused') {
       safeSend(c, startMsg());
@@ -119,14 +123,15 @@ function dropGuest(c) {
   if (j < 0) return;
   Net.conns.splice(j, 1);
   try { c.close(); } catch (e) {}
-  rosterChanged(-1);
+  rosterChanged(-1, c.name);
 }
-function rosterChanged(delta) {
+function rosterChanged(delta, who) {
   Net.n = 1 + Net.conns.length;
-  Net.conns.forEach((c, j) => safeSend(c, { k: 'roster', you: j + 1, n: Net.n }));
+  Net.names = [myName()].concat(Net.conns.map(c => c.name || ''));
+  Net.conns.forEach((c, j) => safeSend(c, { k: 'roster', you: j + 1, n: Net.n, names: Net.names }));
   padOwners();
   lobbyRender();
-  if (G.state === 'playing') flash(delta > 0 ? 'A FRIEND HOPPED ON!' : 'A FRIEND HOPPED OFF');
+  if (delta && G.state === 'playing') flash((who || 'A friend').toUpperCase() + (delta > 0 ? ' HOPPED ON!' : ' HOPPED OFF'));
 }
 function hostData(c, d) {
   c.seen = performance.now();
@@ -136,6 +141,7 @@ function hostData(c, d) {
   else if (d.k === 'dir') { if (isFinite(d.x) && isFinite(d.y)) autoToot(+d.x, +d.y, p); }
   else if (d.k === 'pause') pauseGame();
   else if (d.k === 'resume') resumeGame();
+  else if (d.k === 'name') { c.name = cleanName(d.name); rosterChanged(0); }
 }
 function packState() {
   const r = G.raft, q = v => Math.round(v * 100) / 100;
@@ -186,7 +192,7 @@ function joinRoom(code) {
   const timer = setTimeout(() => { if (Net.peer === peer && !Net.joined) netFail(lost); }, 15000);
   peer.on('open', () => {
     if (Net.peer !== peer) return;
-    const c = peer.connect(ROOM_PREFIX + code, { reliable: true, serialization: 'json' });
+    const c = peer.connect(ROOM_PREFIX + code, { reliable: true, serialization: 'json', metadata: { name: myName() } });
     Net.host = c;
     c.on('open', () => {
       if (Net.host !== c) return;
@@ -207,7 +213,11 @@ function joinRoom(code) {
 }
 function guestData(d) {
   Net.lastSeen = performance.now();
-  if (d.k === 'roster') { Net.me = d.you | 0; Net.n = clamp(d.n | 0, 2, MAX_PLAYERS); padOwners(); lobbyRender(); }
+  if (d.k === 'roster') {
+    Net.me = d.you | 0; Net.n = clamp(d.n | 0, 2, MAX_PLAYERS);
+    Net.names = (Array.isArray(d.names) ? d.names : []).slice(0, MAX_PLAYERS).map(cleanName);
+    padOwners(); lobbyRender();
+  }
   else if (d.k === 's') { if (G.state === 'playing' || G.state === 'paused') { applyState(d.s); (d.e || []).forEach(replay); } }
   else if (d.k === 'start') guestStart(d);
   else if (d.k === 'state') {
@@ -312,15 +322,19 @@ setInterval(() => {
 window.addEventListener('pagehide', () => { if (Net.mode === 'host') broadcast({ k: 'bye' }); });
 
 /* ---------- Lobby screen and pad ---------- */
+function nameOf(p) { return (p === Net.me ? myName() : Net.names[p]) || (p === 0 ? 'Host' : 'Friend ' + p); }
 function playerName(p) {
-  if (p === Net.me) return 'You';
-  return p === 0 ? 'Host' : 'Friend ' + p;
+  if (p !== Net.me) return nameOf(p);
+  return myName() ? myName() + ' (you)' : 'You';
 }
 function myPigs() { return RIDERS.filter((R, i) => mine(i)); }
 function lobbyRender() {
   if (G.state !== 'lobby') return;
   const err = !!Net.err, ready = Net.mode === 'host' ? !!(Net.peer && Net.peer.open) : Net.joined;
   $('onStatus').textContent = err ? Net.err : Net.status;
+  const nameBox = $('onName');
+  nameBox.parentNode.classList.toggle('hidden', err || !ready);
+  if (document.activeElement !== nameBox) nameBox.value = myName();
   $('onShare').classList.toggle('hidden', !(Net.mode === 'host' && ready));
   if (Net.mode === 'host') $('onLink').textContent = shareUrl();
   const crew = $('onCrew');
@@ -329,8 +343,9 @@ function lobbyRender() {
     for (let p = 0; p < MAX_PLAYERS; p++) {
       const row = document.createElement('div');
       if (p < Net.n) {
-        row.innerHTML = '<b>' + playerName(p) + '</b><span>' + RIDERS.map((R, i) => owner(i) === p
+        row.innerHTML = '<b></b><span>' + RIDERS.map((R, i) => owner(i) === p
           ? '<i class="dot" style="--c:' + R.color + ';--cd:' + R.dark + '">' + R.key + ' ' + R.name + '</i>' : '').join('') + '</span>';
+        row.firstChild.textContent = playerName(p);   // names are typed by players: never treat them as HTML
       } else {
         row.className = 'wait';
         row.textContent = Net.mode === 'host' ? 'Waiting for a friend...' : 'Free seat';
@@ -354,14 +369,18 @@ function lobbyRender() {
   }
   $('btnLeave').textContent = err || Net.mode === 'solo' ? 'Back to menu' : 'Leave';
 }
+// Friends' pigs are dimmed and show whose they are
 function padOwners() {
   if (typeof padBtns === 'undefined') return;
-  padBtns.forEach((pb, i) => pb.el.classList.toggle('theirs', !mine(i)));
+  padBtns.forEach((pb, i) => {
+    pb.el.classList.toggle('theirs', !mine(i));
+    pb.nm.textContent = mine(i) ? RIDERS[i].name : RIDERS[i].name + ' · ' + nameOf(owner(i));
+  });
 }
 function nudgePad(i) {
   const el = padBtns[i].el;
   el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope');
-  if (G.quipCd <= 0) { G.quip = { text: 'That is ' + playerName(owner(i)) + '\'s pig!', rider: i, life: 1.2 }; G.quipCd = 1.2; }
+  if (G.quipCd <= 0) { G.quip = { text: 'That is ' + nameOf(owner(i)) + '\'s pig!', rider: i, life: 1.2 }; G.quipCd = 1.2; }
 }
 function onlineHint() {
   const pigs = myPigs();
@@ -370,6 +389,13 @@ function onlineHint() {
 
 $('btnFriends').addEventListener('click', () => { Sound.unlock(); hostRoom(); });
 $('btnLeave').addEventListener('click', leaveRoom);
+$('onName').addEventListener('input', e => {
+  save.name = cleanName(e.target.value); writeSave();
+  if (Net.mode === 'host') rosterChanged(0);
+  else if (Net.mode === 'guest') { netSend({ k: 'name', name: myName() }); lobbyRender(); }
+});
+$('onName').addEventListener('change', e => { e.target.value = myName(); });
+$('onName').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
 $('btnShare').addEventListener('click', async () => {
   Sound.unlock();
   const url = shareUrl(), btn = $('btnShare');
