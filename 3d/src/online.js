@@ -173,7 +173,7 @@ function hostResult(res) {
   if (Net.mode !== 'host') return;
   flushSnap();
   broadcast({ k: 'result', res: { won: res.won, level: res.level, time: res.time, beans: res.beans, hearts: res.hearts,
-    beanPts: res.beanPts, heartPts: res.heartPts, timePts: res.timePts, score: res.score, stars: res.stars } });
+    beanPts: res.beanPts, heartPts: res.heartPts, timePts: res.timePts, score: res.score, stars: res.stars, goals: res.goals } });
 }
 function toLobby() {
   if (Net.mode !== 'host') return;

@@ -112,6 +112,12 @@
   .stats .total { font-weight: 900; font-size: 18px; }
   .stars { font-size: 34px; color: #ffb703; letter-spacing: 4px; margin: 4px 0; }
   .stars .off { color: rgba(31,42,68,.15); }
+  .goals { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; font-weight: 800; color: rgba(31,42,68,.4); margin-bottom: 2px; }
+  .goals .got { color: var(--ink); }
+  .goals .got::first-letter { color: #ffb703; }
+  .lvl .st { display: block; color: #ffb703; font-size: 15px; letter-spacing: 2px; line-height: 1.1; }
+  .lvl .st .off { color: rgba(31,42,68,.15); }
+  .unlock small { font-weight: 700; opacity: .7; }
   .btn small { display: block; font-size: 12px; font-weight: 700; opacity: .7; }
   .pigs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 4px; }
   .pig { border: 0; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 4px 0 rgba(31,42,68,.18);
@@ -228,6 +234,8 @@
         <p><b>Spikes pop a heart.</b> Soft green walls are safe to bump.</p>
         <p>Grab <b>beans</b> to refill gas. Reach the finish fast.</p>
         <p>Toot the <b>same pig 3 times fast</b> for a ROCKET TOOT.</p>
+        <p><b>3 stars</b>: finish, lose no hearts, beat par.</p>
+        <p>Finish the <b>Daily river</b> every day for a streak and bonus beans.</p>
       </div>
       <div class="keys">
         Tap a rider or the buttons · <kbd>1</kbd>–<kbd>4</kbd> toot that rider<br>
@@ -353,7 +361,9 @@ const OUTFIT_SKINS = [
 /* Daily river: a fresh course generated from today's date */
 const DAILY = 'daily';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function todayKey() { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
+function dayKey(d) { return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
+function todayKey() { return dayKey(new Date()); }
+function dayBefore(key) { const d = new Date(Math.floor(key / 10000), Math.floor(key / 100) % 100 - 1, key % 100); d.setDate(d.getDate() - 1); return dayKey(d); }
 function fmtDay(key) { return MONTHS[Math.floor(key / 100) % 100 - 1] + ' ' + (key % 100); }
 function dailyDef(key) {
   const r = mulberry32(key);
@@ -386,9 +396,17 @@ function fmtTime(t) {
    Save data (best-effort; game works without storage)
    ========================================================= */
 const SAVE_KEY = 'tootraft.v1';
-let save = { unlocked: 1, best: {}, muted: false, beanBank: 0, looks: null, daily: null };
+let save = { unlocked: 1, best: {}, stars: {}, muted: false, beanBank: 0, looks: null, daily: null, streak: null };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) save = Object.assign(save, s); } catch (e) {}
 function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+
+/* Daily streak: finish the Daily river on days in a row. The streak is alive if the last finish was today or yesterday. */
+const STREAK_BONUS = 5, STREAK_BONUS_MAX = 25;
+function streakAlive() {
+  const s = save.streak, t = todayKey();
+  return s && (s.last === t || s.last === dayBefore(t)) ? s.count : 0;
+}
+function starRow(n) { let h = ''; for (let i = 0; i < 3; i++) h += i < n ? '★' : '<span class="off">★</span>'; return h; }
 
 /* =========================================================
    Sound (procedural Web Audio, no files)
@@ -1110,17 +1128,28 @@ function splash(x, y, n) {
    ========================================================= */
 function finishLevel(won) {
   const def = G.def;
-  const res = { won, level: G.level, time: G.t, beans: G.beans, hearts: G.hearts };
+  const res = { won, level: G.level, time: G.t, beans: G.beans, hearts: G.hearts, bonus: 0 };
+  // first Daily finish of the day grows the streak and pays bonus beans
+  if (won && G.level === DAILY) {
+    const s = save.streak, k = def.daily;
+    if (!s || s.last !== k) {
+      const count = s && s.last === dayBefore(k) ? s.count + 1 : 1;
+      save.streak = { count, last: k, best: Math.max(count, (s && s.best) || 0) };
+      res.streak = count;
+      res.bonus = Math.min(count * STREAK_BONUS, STREAK_BONUS_MAX);
+    }
+  }
   // every bean ever collected counts towards wardrobe unlocks
   const bankBefore = save.beanBank || 0;
-  save.beanBank = bankBefore + G.beans;
+  save.beanBank = bankBefore + G.beans + res.bonus;
   res.unlocked = HATS.concat(OUTFIT_SKINS).filter(o => o.cost > bankBefore && o.cost <= save.beanBank).map(o => o.name);
   if (won) {
     res.beanPts = G.beans * 100;
     res.heartPts = G.hearts * 500;
     res.timePts = Math.max(0, Math.round((def.par - G.t) * 20));
     res.score = res.beanPts + res.heartPts + res.timePts;
-    res.stars = 1 + (G.hearts === MAX_HEARTS ? 1 : 0) + (G.t <= def.par ? 1 : 0);
+    res.goals = [true, G.hearts === MAX_HEARTS, G.t <= def.par];
+    res.stars = res.goals.filter(Boolean).length;
     if (G.level === DAILY) {
       const prev = save.daily && save.daily.key === def.daily ? save.daily : null;
       res.newBest = !prev || res.score > prev.score;
@@ -1132,12 +1161,14 @@ function finishLevel(won) {
       if (res.newBest) save.best[G.level] = { score: res.score, time: G.t };
       else if (G.t < prev.time) prev.time = G.t;
       save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, G.level + 2));
+      if (!save.stars) save.stars = {};
+      save.stars[G.level] = Math.max(save.stars[G.level] || 0, res.stars);
       G.runTotal += res.score;
     }
   }
   writeSave();
   track(won ? 'level_complete' : 'game_over', riverInfo(won
-    ? { time: Math.round(G.t), beans: G.beans, hearts: G.hearts, score: res.score, stars: res.stars }
+    ? Object.assign({ time: Math.round(G.t), beans: G.beans, hearts: G.hearts, score: res.score, stars: res.stars }, res.streak ? { streak: res.streak } : null)
     : { time: Math.round(G.t), beans: G.beans }));
   G.lastResult = res;
   setState('result');
@@ -1188,12 +1219,15 @@ function buildLevelButtons() {
     const locked = i >= save.unlocked;
     b.disabled = locked;
     b.innerHTML = '<b>' + (i + 1) + '. ' + L.name + '</b>' +
-      (locked ? 'Locked' : best ? 'Best ' + best.score + '<br>' + fmtTime(best.time) : 'Not played');
+      (locked ? 'Locked' : '<span class="st">' + starRow((save.stars || {})[i] || 0) + '</span>' + (best ? 'Best ' + best.score : 'Not played'));
     b.addEventListener('click', () => { Sound.unlock(); startLevel(i, i === 0); });
     UI.levels.appendChild(b);
   });
   const today = todayKey(), d = save.daily && save.daily.key === today ? save.daily : null;
-  $('btnDaily').innerHTML = 'Daily river<small>' + fmtDay(today) + (d ? ' · best ' + fmtTime(d.time) : ' · new course') + '</small>';
+  const streak = streakAlive();
+  $('btnDaily').innerHTML = 'Daily river<small>' + (d
+    ? (streak > 1 ? 'Streak ' + streak : 'Done') + ' · best ' + fmtTime(d.time)
+    : streak ? 'Streak ' + streak + ' · play today' : fmtDay(today) + ' · new course') + '</small>';
   $('btnWardrobe').innerHTML = 'Wardrobe<small>' + (save.beanBank || 0) + ' beans</small>';
 }
 
@@ -1247,12 +1281,15 @@ function showResult() {
         : '<button class="btn" data-act="retry">Try again</button>' +
           '<button class="btn alt" data-act="menu">Menu</button>');
   } else {
-    let stars = '';
-    for (let s = 0; s < 3; s++) stars += s < r.stars ? '★' : '<span class="off">★</span>';
+    const stars = starRow(r.stars);
+    const goals = r.goals ? '<div class="goals">' + ['Finish', 'No hits', 'Par ' + fmtTime(def.par)]
+      .map((g, i) => '<span' + (r.goals[i] ? ' class="got"' : '') + '>★ ' + g + '</span>').join('') + '</div>' : '';
+    const streakNote = r.streak ? '<div class="unlock">' + (r.streak > 1 ? r.streak + ' day streak' : 'Streak started') +
+      ' · +' + r.bonus + ' bonus beans<br><small>Come back tomorrow for +' + Math.min((r.streak + 1) * STREAK_BONUS, STREAK_BONUS_MAX) + '</small></div>' : '';
     html = '<h2>' + (daily ? 'Daily done' : last ? 'River conquered' : 'Finished') + '</h2>' +
       '<div class="quip">' + pick(QUIPS.winLine) + '</div>' +
       '<div class="tag">' + (daily ? 'Daily · ' + fmtDay(def.daily) : def.name) + (r.newBest ? ' · <span class="newbest">New best</span>' : '') + '</div>' +
-      '<div class="stars">' + stars + '</div>' +
+      '<div class="stars">' + stars + '</div>' + goals +
       '<div class="stats">' +
       '<div><span>Time ' + fmtTime(r.time) + ' (par ' + fmtTime(def.par) + ')</span><b>+' + r.timePts + '</b></div>' +
       '<div><span>Beans × ' + r.beans + '</span><b>+' + r.beanPts + '</b></div>' +
@@ -1260,7 +1297,7 @@ function showResult() {
       '<div class="total"><span>Score</span><span>' + r.score + '</span></div>' +
       (last && !online() ? '<div class="total"><span>Run total</span><span>' + G.runTotal + '</span></div>' : '') +
       (daily && !online() ? '<div class="total"><span>Today\'s best</span><span>' + save.daily.score + '</span></div>' : '') +
-      '</div>' + unlocks +
+      '</div>' + streakNote + unlocks +
       (online() ? onlineButtons(r) : daily
         ? '<button class="btn" data-act="retry">Try again</button><button class="btn alt" data-act="menu">Menu</button>'
         : (last

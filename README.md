@@ -16,7 +16,8 @@ Open `index.html` in any browser (Safari, Chrome, phone). No install, no server.
 ## Modes
 
 - **Rivers 1 to 3:** Lazy Creek, Spiky Bends, Gas Gauntlet
-- **Daily river:** a new course every day
+- **Daily river:** a new course every day. Finishing it on days in a row builds a streak that pays bonus beans (5 per streak day, up to 25)
+- **Stars (3D build):** up to 3 per river: finish, lose no hearts, beat par. The best is saved and shown on the menu
 - **Wardrobe:** lifetime beans unlock hats and outfits per pig
 - **Play with friends (3D build):** tap Play with friends, send the link, up to 4 players share the raft and each one toots only their own pigs. Everyone types a name in the lobby; names show in the player list and on the pig buttons. The host picks the river. Friends who open the link land straight on the raft.
 
