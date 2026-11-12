@@ -366,7 +366,7 @@ function lobbyRender() {
       b.addEventListener('click', () => { Sound.unlock(); fn(); });
       box.appendChild(b);
     };
-    LEVELS.forEach((L, i) => { if (i < save.unlocked) add((i + 1) + '. ' + L.name, 'Start', () => startLevel(i, i === 0)); });
+    LEVELS.forEach((L, i) => { if (riverOpen(i)) add((i + 1) + '. ' + L.name, 'Start', () => startLevel(i, i === 0)); });
     add('Daily river', fmtDay(todayKey()), () => startLevel(DAILY, false));
   }
   $('btnLeave').textContent = err || Net.mode === 'solo' ? 'Back to menu' : 'Leave';

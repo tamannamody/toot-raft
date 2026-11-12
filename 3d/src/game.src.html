@@ -49,6 +49,7 @@
   #progFill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 6px; background: var(--good); }
   #progRaft { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; left: 0;
     border-radius: 50%; background: #fff4e6; border: 4px solid var(--accent); }
+  #progCheck { position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: #ffb703; }
   #progress::after { content: ""; position: absolute; right: -4px; top: -5px; width: 10px; height: 20px;
     background: repeating-linear-gradient(0deg, #1f2a44 0 5px, #fff 5px 10px); border-radius: 2px; }
 
@@ -180,8 +181,19 @@
     #scrMenu h1 { font-size: 38px; -webkit-text-stroke-width: 6px; }
     #scrMenu .tag { display: none; }
     #scrMenu .btn { padding: 10px; }
-    #scrMenu .lvl { padding: 6px 4px; }
-    #scrMenu .levels { margin-top: 10px; }
+    #scrMenu .lvl { padding: 5px 4px; }
+    #scrMenu .lvl b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #btnFriends small { display: none; }
+    #scrMenu .levels { margin-top: 10px; gap: 6px; }
+    #scrMenu .howto { margin-top: 6px; }
+  }
+  /* six rivers: short screens drop the best score line on each river */
+  @media (max-height: 620px) { #scrMenu .lvl .sub { display: none; } }
+  /* short and wide (phone on its side): rivers sit beside the buttons */
+  @media (max-height: 560px) and (min-aspect-ratio: 1/1) {
+    #scrMenu .card { width: min(680px, calc(100vw - 24px)); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); column-gap: 12px; align-items: start; }
+    #scrMenu .card > * { grid-column: 1; }
+    #scrMenu .card > .levels { grid-column: 2; grid-row: 1 / span 4; margin-top: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 </style>
 </head>
@@ -205,7 +217,7 @@
       </button>
     </div>
   </div>
-  <div id="progress"><div id="progFill"></div><div id="progRaft"></div></div>
+  <div id="progress"><div id="progFill"></div><div id="progCheck"></div><div id="progRaft"></div></div>
 </div>
 
 <div id="flash" class="hidden"></div>
@@ -234,7 +246,8 @@
         <p><b>Spikes pop a heart.</b> Soft green walls are safe to bump.</p>
         <p>Grab <b>beans</b> to refill gas. Reach the finish fast.</p>
         <p>Toot the <b>same pig 3 times fast</b> for a ROCKET TOOT.</p>
-        <p><b>3 stars</b>: finish, lose no hearts, beat par.</p>
+        <p><b>3 stars</b>: finish, lose no hearts, beat par. Stars open rivers 4 to 6.</p>
+        <p>Pop after the <b>halfway checkpoint</b>? Continue from there once.</p>
         <p>Finish the <b>Daily river</b> every day for a streak and bonus beans.</p>
       </div>
       <div class="keys">
@@ -335,6 +348,16 @@ const LEVELS = [
     spacing: 360, weights: { log: 3, gate: 3, mine: 3, whirl: 2 }, par: 55 },
   { name: 'Gas Gauntlet', length: 5400, seed: 73, amp: 175, width: [112, 138], spikeFrac: 0.8,
     spacing: 315, weights: { log: 3, gate: 4, mine: 3, whirl: 2 }, par: 70 },
+  // rivers 4 to 6 also need stars: finish the river before AND hold this many stars in total
+  { name: 'Whirlpool Bay', length: 5000, seed: 97, amp: 190, width: [128, 162], spikeFrac: 0.5,
+    spacing: 330, weights: { log: 2, gate: 2, mine: 1, whirl: 5 }, par: 68, needStars: 5,
+    hint: 'Whirlpool Bay: whirlpools spin the raft. Toot out early.' },
+  { name: 'Mine Sweep',    length: 5600, seed: 131, amp: 160, width: [118, 148], spikeFrac: 0.65,
+    spacing: 300, weights: { log: 2, gate: 2, mine: 6, whirl: 1 }, par: 74, needStars: 8,
+    hint: 'Mine Sweep: spiky mines roll side to side. Wait for a gap.' },
+  { name: 'The Big Stink', length: 6400, seed: 211, amp: 185, width: [106, 132], spikeFrac: 0.9,
+    spacing: 290, weights: { log: 3, gate: 4, mine: 4, whirl: 3 }, par: 84, needStars: 11,
+    hint: 'The Big Stink: everything at once. Good luck.' },
 ];
 
 /* Wardrobe: unlocked by lifetime beans collected (nothing is spent) */
@@ -406,6 +429,10 @@ function streakAlive() {
   const s = save.streak, t = todayKey();
   return s && (s.last === t || s.last === dayBefore(t)) ? s.count : 0;
 }
+function totalStars() { let n = 0; for (const k in save.stars || {}) n += save.stars[k]; return n; }
+function riverOpen(i) { return i < save.unlocked && totalStars() >= (LEVELS[i].needStars || 0); }
+// players who beat the old last river before rivers 4 to 6 existed still get the next one
+for (const k in save.best) save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, (k | 0) + 2));
 function starRow(n) { let h = ''; for (let i = 0; i < 3; i++) h += i < n ? '★' : '<span class="off">★</span>'; return h; }
 
 /* =========================================================
@@ -788,6 +815,7 @@ function loadLevel(i, dailyKey) {
   G.invuln = 0; G.ending = null; G.toots = 0; G.parts.length = 0; G.rings.length = 0; G.shake = 0;
   G.quip = null; G.quipCd = 0; G.flash = null; G.flashCd = 0; G.recent.length = 0; G.prevD = G.loc.d;
   G.combo = { rider: -1, n: 0, t: -9 };
+  G.continued = false; G.passedCheck = false;
   G.track.hazards.forEach(h => (h.inside = false));
   R3D.buildLevel(G.track);
 }
@@ -809,7 +837,7 @@ function showHint() {
   UI.hint.textContent = online() && Net.n > 1 ? onlineHint()
     : i === 0 ? 'Pip is at the back. Press 1 or tap Pip to toot forward.'
     : i === DAILY ? 'Daily river for ' + fmtDay(G.def.daily) + '. Same course for everyone today.'
-    : G.def.name + ': watch the spin and time the gates.';
+    : G.def.hint || G.def.name + ': watch the spin and time the gates.';
   UI.hint.classList.remove('hidden');
   UI.hint.style.opacity = 1;
 }
@@ -1072,6 +1100,11 @@ function step(dt) {
   }
   G.prevD = G.loc.d;
 
+  if (!G.passedCheck && G.loc.d >= checkpointD()) {
+    G.passedCheck = true;
+    if (!online()) { flash('CHECKPOINT!'); sfx('bean'); }
+  }
+
   if (G.loc.d >= T.L) {
     G.ending = { type: 'win', t: 0 };
     sfx('win'); flash('SMELLS LIKE VICTORY!'); G.quip = null;
@@ -1124,6 +1157,38 @@ function splash(x, y, n) {
 }
 
 /* =========================================================
+   Checkpoint: popping after halfway can continue from there (once per river, solo only)
+   ========================================================= */
+// Stratos rewarded ads are not live yet: the reward is free for now (see stratos-games-site CLAUDE.md)
+function offerReward(onDone) { onDone(); }
+// halfway, nudged back so the raft never lands on a hazard
+function checkpointD() {
+  const T = G.track;
+  if (T.check === undefined) {
+    let d = T.L / 2;
+    while (d > 400 && T.hazards.some(h => Math.abs(h.d - d) < 130)) d -= 30;
+    T.check = d;
+  }
+  return T.check;
+}
+function canContinue() { return !online() && !G.continued && G.passedCheck; }
+function continueRun() {
+  if (!canContinue()) return;
+  offerReward(() => {
+    const d = checkpointD(), p = G.track.point(d, 0), f = G.track.frame(d), r = G.raft;
+    r.x = p.x; r.y = p.y; r.vx = f.fx * CURRENT; r.vy = f.fy * CURRENT; r.w = 0; r.scale = 1; r.ang = Math.PI / 2;
+    r.riders.forEach(rd => { rd.gas = GAS_MAX; rd.anim = 0; rd.fizz = 0; });
+    G.loc = G.track.toLocal(r.x, r.y); G.prevD = G.loc.d;
+    G.hearts = MAX_HEARTS; G.invuln = 2; G.ending = null; G.continued = true; G.shake = 0;
+    G.parts.length = 0; G.rings.length = 0; G.quip = null;
+    G.track.hazards.forEach(h => (h.inside = false));
+    track('continue_used', riverInfo({ time: Math.round(G.t) }));
+    setState('playing');
+    flash('BACK ON THE RAFT!');
+  });
+}
+
+/* =========================================================
    Results
    ========================================================= */
 function finishLevel(won) {
@@ -1145,10 +1210,11 @@ function finishLevel(won) {
   res.unlocked = HATS.concat(OUTFIT_SKINS).filter(o => o.cost > bankBefore && o.cost <= save.beanBank).map(o => o.name);
   if (won) {
     res.beanPts = G.beans * 100;
-    res.heartPts = G.hearts * 500;
+    res.continued = G.continued;
+    res.heartPts = G.continued ? 0 : G.hearts * 500;
     res.timePts = Math.max(0, Math.round((def.par - G.t) * 20));
     res.score = res.beanPts + res.heartPts + res.timePts;
-    res.goals = [true, G.hearts === MAX_HEARTS, G.t <= def.par];
+    res.goals = [true, !G.continued && G.hearts === MAX_HEARTS, G.t <= def.par];
     res.stars = res.goals.filter(Boolean).length;
     if (G.level === DAILY) {
       const prev = save.daily && save.daily.key === def.daily ? save.daily : null;
@@ -1169,7 +1235,7 @@ function finishLevel(won) {
   writeSave();
   track(won ? 'level_complete' : 'game_over', riverInfo(won
     ? Object.assign({ time: Math.round(G.t), beans: G.beans, hearts: G.hearts, score: res.score, stars: res.stars }, res.streak ? { streak: res.streak } : null)
-    : { time: Math.round(G.t), beans: G.beans }));
+    : { time: Math.round(G.t), beans: G.beans, progress: Math.round(clamp(G.loc.d / G.track.L, 0, 1) * 100), can_continue: canContinue() }));
   G.lastResult = res;
   setState('result');
   hostResult(res);
@@ -1216,10 +1282,11 @@ function buildLevelButtons() {
     const b = document.createElement('button');
     b.className = 'lvl';
     const best = save.best[i];
-    const locked = i >= save.unlocked;
+    const locked = !riverOpen(i);
     b.disabled = locked;
     b.innerHTML = '<b>' + (i + 1) + '. ' + L.name + '</b>' +
-      (locked ? 'Locked' : '<span class="st">' + starRow((save.stars || {})[i] || 0) + '</span>' + (best ? 'Best ' + best.score : 'Not played'));
+      (locked ? '<span class="lock">' + (i < save.unlocked ? 'Needs ' + L.needStars + ' ★' : 'Locked') + '</span>'
+        : '<span class="st">' + starRow((save.stars || {})[i] || 0) + '</span><span class="sub">' + (best ? 'Best ' + best.score : 'Not played') + '</span>');
     b.addEventListener('click', () => { Sound.unlock(); startLevel(i, i === 0); });
     UI.levels.appendChild(b);
   });
@@ -1269,6 +1336,9 @@ function buildWardrobe() {
 
 function showResult() {
   const r = G.lastResult, def = G.def, daily = r.level === DAILY, last = r.level === LEVELS.length - 1;
+  const nextL = !daily && !last ? LEVELS[r.level + 1] : null, nextShut = nextL && !riverOpen(r.level + 1);
+  const needNote = r.won && nextShut && !online()
+    ? '<div class="unlock">' + nextL.name + ' opens at ' + nextL.needStars + ' ★ · you have ' + totalStars() + '<br><small>Replay rivers for more stars</small></div>' : '';
   const unlocks = r.unlocked.length
     ? '<div class="unlock">Unlocked in the wardrobe: ' + r.unlocked.join(', ') + '</div>' : '';
   let html;
@@ -1278,8 +1348,11 @@ function showResult() {
       '<div class="stats"><div><span>Time</span><b>' + fmtTime(r.time) + '</b></div>' +
       '<div><span>Beans</span><b>' + r.beans + '</b></div></div>' + unlocks +
       (online() ? onlineButtons(r)
-        : '<button class="btn" data-act="retry">Try again</button>' +
-          '<button class="btn alt" data-act="menu">Menu</button>');
+        : canContinue()
+          ? '<button class="btn" data-act="continue">Continue from halfway<small>Full hearts · the clock keeps running</small></button>' +
+            '<div class="row"><button class="btn alt" data-act="retry">Start over</button><button class="btn alt" data-act="menu">Menu</button></div>'
+          : '<button class="btn" data-act="retry">Try again</button>' +
+            '<button class="btn alt" data-act="menu">Menu</button>');
   } else {
     const stars = starRow(r.stars);
     const goals = r.goals ? '<div class="goals">' + ['Finish', 'No hits', 'Par ' + fmtTime(def.par)]
@@ -1293,17 +1366,18 @@ function showResult() {
       '<div class="stats">' +
       '<div><span>Time ' + fmtTime(r.time) + ' (par ' + fmtTime(def.par) + ')</span><b>+' + r.timePts + '</b></div>' +
       '<div><span>Beans × ' + r.beans + '</span><b>+' + r.beanPts + '</b></div>' +
-      '<div><span>Hearts left × ' + r.hearts + '</span><b>+' + r.heartPts + '</b></div>' +
+      '<div><span>' + (r.continued ? 'Hearts (continued)' : 'Hearts left × ' + r.hearts) + '</span><b>+' + r.heartPts + '</b></div>' +
       '<div class="total"><span>Score</span><span>' + r.score + '</span></div>' +
       (last && !online() ? '<div class="total"><span>Run total</span><span>' + G.runTotal + '</span></div>' : '') +
       (daily && !online() ? '<div class="total"><span>Today\'s best</span><span>' + save.daily.score + '</span></div>' : '') +
-      '</div>' + streakNote + unlocks +
+      '</div>' + streakNote + needNote + unlocks +
       (online() ? onlineButtons(r) : daily
         ? '<button class="btn" data-act="retry">Try again</button><button class="btn alt" data-act="menu">Menu</button>'
         : (last
           ? '<button class="btn" data-act="again">Play again</button>'
+          : nextShut ? '<button class="btn" data-act="retry">Replay for stars</button>'
           : '<button class="btn" data-act="next">Next river</button>') +
-          '<div class="row"><button class="btn alt" data-act="retry">Replay</button>' +
+          (nextShut ? '<div class="row">' : '<div class="row"><button class="btn alt" data-act="retry">Replay</button>') +
           '<button class="btn alt" data-act="menu">Menu</button></div>');
   }
   UI.resultCard.innerHTML = html;
@@ -1327,6 +1401,7 @@ function resultAction(a) {
   if (a === 'retry') startLevel(lvl, lvl === 0);
   else if (a === 'next') startLevel(lvl + 1, false);
   else if (a === 'again') startLevel(0, true);
+  else if (a === 'continue') continueRun();
   else if (a === 'menu') setState('menu');
   else if (a === 'lobby') toLobby();
   else if (a === 'leave') leaveRoom();
@@ -1365,6 +1440,10 @@ function updateHud() {
   });
   set('beans', G.beans, v => (UI.beans.textContent = 'Beans ' + v));
   set('lvl', G.level, v => (UI.lvlname.textContent = v === DAILY ? 'Daily · ' + fmtDay(G.def.daily) : (v + 1) + ' · ' + G.def.name));
+  set('check', G.track.L + ':' + online(), () => {
+    $('progCheck').style.left = (checkpointD() / G.track.L * 100) + '%';
+    $('progCheck').style.display = online() ? 'none' : '';
+  });
   set('time', fmtTime(G.t), v => (UI.timer.textContent = v));
   const p = clamp(G.loc.d / G.track.L, 0, 1);
   set('prog', Math.round(p * 400), () => {

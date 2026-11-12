@@ -16,6 +16,8 @@ Open `index.html` in any browser (Safari, Chrome, phone). No install, no server.
 ## Modes
 
 - **Rivers 1 to 3:** Lazy Creek, Spiky Bends, Gas Gauntlet
+- **Rivers 4 to 6 (3D build):** Whirlpool Bay, Mine Sweep, The Big Stink. Each opens when the river before it is finished and you hold enough stars in total (5, 8, 11)
+- **Checkpoint (3D build, solo):** pop after the halfway mark and you can continue from there once per river, with full hearts. The clock keeps running, and a continued run scores no heart points and cannot earn the No hits star. It goes through `offerReward()`, which is free for now and will show a rewarded ad once Stratos ads are live
 - **Daily river:** a new course every day. Finishing it on days in a row builds a streak that pays bonus beans (5 per streak day, up to 25)
 - **Stars (3D build):** up to 3 per river: finish, lose no hearts, beat par. The best is saved and shown on the menu
 - **Wardrobe:** lifetime beans unlock hats and outfits per pig
