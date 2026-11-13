@@ -1,6 +1,6 @@
 # Toot Raft
 
-Four pigs on a spinning raft, one spiky river, and nothing but toots to steer with.
+One pig on a spinning raft, one spiky river, and nothing but toots to steer with.
 
 ## Play
 
@@ -8,10 +8,11 @@ Open `index.html` in any browser (Safari, Chrome, phone). No install, no server.
 
 ## Controls
 
-- **1 2 3 4** or tap a pig: that pig toots and pushes the raft away from its side
-- **Same pig 3 times fast:** ROCKET TOOT
-- **Arrow keys / WASD, or tap the water:** push the raft that way (the best-aimed pig toots)
-- **P / Esc:** pause
+- **Arrow keys / WASD, the arrow buttons, or tap the water:** your pig runs round the raft edge to the far side, then toots, pushing the raft that way
+- **Tap your pig, its name button, or Space:** toot on the spot
+- **3 toots fast from the same spot:** ROCKET TOOT
+- **Your name:** type it on the home screen (or in the Wardrobe); it rides above your pig
+- **P / Esc:** pause · **R:** restart
 
 ## Modes
 
@@ -20,12 +21,12 @@ Open `index.html` in any browser (Safari, Chrome, phone). No install, no server.
 - **Checkpoint (3D build, solo):** pop after the halfway mark and you can continue from there once per river, with full hearts. The clock keeps running, and a continued run scores no heart points and cannot earn the No hits star. It goes through `offerReward()`, which is free for now and will show a rewarded ad once Stratos ads are live
 - **Daily river:** a new course every day. Finishing it on days in a row builds a streak that pays bonus beans (5 per streak day, up to 25)
 - **Stars (3D build):** up to 3 per river: finish, lose no hearts, beat par. The best is saved and shown on the menu
-- **Wardrobe:** lifetime beans unlock hats and outfits per pig
-- **Play with friends (3D build):** tap Play with friends, send the link, up to 4 players share the raft and each one toots only their own pigs. Everyone types a name in the lobby; names show in the player list and on the pig buttons. The host picks the river. Friends who open the link land straight on the raft.
+- **Wardrobe:** lifetime beans unlock hats and outfits for your pig
+- **Play with friends (3D build):** tap Play with friends, send the link, up to 4 players share the raft, each with their own pig (blue, red, yellow, teal). Names and wardrobe looks travel to everyone; names show in the player list and over each pig. The host picks the river. Friends who open the link land straight on the raft.
 
 ## How online play works
 
-The host's game runs the river and sends the raft to everyone 30 times a second; friends send their toots back. Browsers connect directly (WebRTC, through the PeerJS library bundled into the file). The free PeerJS server at 0.peerjs.com only introduces the browsers, and PeerJS's free relay helps when a network blocks a direct link. Solo play never uses the network. If the PeerJS server is down, online play shows "Could not reach the online server" and solo still works.
+The host's game runs the river and sends the raft and every pig's spot to everyone 30 times a second; friends send their pushes and toots back. Browsers connect directly (WebRTC, through the PeerJS library bundled into the file). The free PeerJS server at 0.peerjs.com only introduces the browsers, and PeerJS's free relay helps when a network blocks a direct link. Solo play never uses the network. If the PeerJS server is down, online play shows "Could not reach the online server" and solo still works.
 
 ## Note
 

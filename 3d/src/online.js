@@ -1,7 +1,7 @@
 /* =========================================================
    Play with friends
    One player hosts and shares a link; up to three friends open it and join the same raft.
-   Each player toots only their own pigs. The host's game runs the river and sends the raft
+   Each player has one pig and toots only that pig. The host's game runs the river and sends the raft
    to everyone 30 times a second; friends send their toots to the host.
    Browsers talk to each other directly (WebRTC through PeerJS). The free PeerJS server is
    used only to introduce them. Solo play never touches the network.
@@ -19,19 +19,29 @@ const Net = {
   joined: false,
   me: 0, n: 1,      // my player number, players on the raft
   names: [],        // player names, by player number
+  looks: [],        // each player's wardrobe look, by player number
   code: '', out: [], snapAcc: 0, lastSeen: 0,
   status: '', err: '',
 };
 
 const online = () => Net.mode !== 'solo';
-const owner = i => i % Net.n;
-const mine = i => !online() || owner(i) === Net.me;
+const owner = i => i;                 // pig i belongs to player i
+const mine = i => i === Net.me;
 // The host records what happens so friends can replay the same sounds, clouds and jokes.
 function emit(...a) { if (Net.mode === 'host') Net.out.push(a); }
 function sfx(name, arg) { Sound[name](arg); emit('s', name, arg); }
 
 function cleanName(v) { return String(v || '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 14); }
 function myName() { return cleanName(save.name); }
+// a look sent by another player: only known hats and outfits get through
+function cleanLook(l) {
+  l = l && typeof l === 'object' ? l : {};
+  return { hat: HATS.some(h => h.id === l.hat) ? l.hat : 'none', outfit: OUTFIT_SKINS.some(o => o.id === l.outfit) ? l.outfit : 'classic' };
+}
+function seatChanged() {
+  seat.me = Net.me; seat.looks = Net.looks.slice();
+  R3D.refreshLooks();
+}
 function roomCode() {
   const A = 'abcdefghjkmnpqrstuvwxyz23456789';
   let s = ''; for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)];
@@ -62,9 +72,10 @@ function netReset() {
   if (Net.mode === 'host') broadcast({ k: 'bye' });
   const peer = Net.peer;
   Net.peer = null; Net.host = null; Net.conns = []; Net.joined = false;
-  Net.mode = 'solo'; Net.me = 0; Net.n = 1; Net.names = []; Net.out = []; Net.snapAcc = 0; Net.err = ''; Net.status = '';
+  Net.mode = 'solo'; Net.me = 0; Net.n = 1; Net.names = []; Net.looks = []; Net.out = []; Net.snapAcc = 0; Net.err = ''; Net.status = '';
   if (peer) setTimeout(() => { try { peer.destroy(); } catch (e) {} }, 150);   // let the goodbye go out first
   padOwners();
+  seatChanged();
 }
 let retryCode = '';   // a friend whose join failed can try the same link again
 function netFail(msg) {
@@ -90,7 +101,7 @@ function hostRoom() {
   Net.peer = peer;
   peer.on('open', () => {
     if (Net.peer !== peer) return;
-    Net.status = 'Send this link to up to 3 friends. Everyone gets their own pigs.';
+    Net.status = 'Send this link to up to 3 friends. Everyone gets their own pig.';
     lobbyRender();
     track('online_host');
   });
@@ -108,6 +119,7 @@ function hostAccept(c) {
     if (Net.conns.length >= MAX_PLAYERS - 1) { safeSend(c, { k: 'full' }); setTimeout(() => c.close(), 500); return; }
     c.seen = performance.now();
     c.name = cleanName(c.metadata && c.metadata.name);
+    c.look = cleanLook(c.metadata && c.metadata.look);
     Net.conns.push(c);
     rosterChanged(1, c.name);
     // a river is already going: bring them straight onto the raft
@@ -130,8 +142,10 @@ function dropGuest(c) {
 function rosterChanged(delta, who) {
   Net.n = 1 + Net.conns.length;
   Net.names = [myName()].concat(Net.conns.map(c => c.name || ''));
-  Net.conns.forEach((c, j) => safeSend(c, { k: 'roster', you: j + 1, n: Net.n, names: Net.names }));
+  Net.looks = [myLook()].concat(Net.conns.map(c => c.look || PLAIN_LOOK));
+  Net.conns.forEach((c, j) => safeSend(c, { k: 'roster', you: j + 1, n: Net.n, names: Net.names, looks: Net.looks }));
   padOwners();
+  seatChanged();
   lobbyRender();
   if (delta && G.state === 'playing') flash((who || 'A friend').toUpperCase() + (delta > 0 ? ' HOPPED ON!' : ' HOPPED OFF'));
 }
@@ -139,18 +153,20 @@ function hostData(c, d) {
   c.seen = performance.now();
   const p = Net.conns.indexOf(c) + 1;
   if (p < 1 || !d || typeof d !== 'object') return;
-  if (d.k === 'toot') { const i = d.i | 0; if (i >= 0 && i < 4 && owner(i) === p) toot(i); }
-  else if (d.k === 'dir') { if (isFinite(d.x) && isFinite(d.y)) autoToot(+d.x, +d.y, p); }
+  if (d.k === 'toot') { if (G.state === 'playing' && !G.ending) toot(p); }
+  else if (d.k === 'dir') { if (isFinite(d.x) && isFinite(d.y)) sendPig(p, +d.x, +d.y); }
   else if (d.k === 'pause') pauseGame();
   else if (d.k === 'resume') resumeGame();
-  else if (d.k === 'name') { c.name = cleanName(d.name); rosterChanged(0); }
+  else if (d.k === 'name') { c.name = cleanName(d.name); if (d.look) c.look = cleanLook(d.look); rosterChanged(0); }
 }
 function packState() {
   const r = G.raft, q = v => Math.round(v * 100) / 100;
   return [q(r.x), q(r.y), q(r.vx), q(r.vy), Math.round(r.ang * 1000) / 1000, q(r.w), q(r.scale),
     q(r.riders[0].gas), q(r.riders[1].gas), q(r.riders[2].gas), q(r.riders[3].gas),
     G.hearts, G.beans, q(G.invuln), q(G.t), q(G.simTime), G.started ? 1 : 0,
-    G.ending ? (G.ending.type === 'win' ? 1 : 2) : 0, G.ending ? q(G.ending.t) : 0, q(G.shake)];
+    G.ending ? (G.ending.type === 'win' ? 1 : 2) : 0, G.ending ? q(G.ending.t) : 0, q(G.shake),
+    Math.round(r.riders[0].pos * 1000) / 1000, Math.round(r.riders[1].pos * 1000) / 1000,
+    Math.round(r.riders[2].pos * 1000) / 1000, Math.round(r.riders[3].pos * 1000) / 1000];
 }
 function startMsg() {
   const got = [];
@@ -194,7 +210,7 @@ function joinRoom(code) {
   const timer = setTimeout(() => { if (Net.peer === peer && !Net.joined) netFail(lost); }, 25000);
   peer.on('open', () => {
     if (Net.peer !== peer) return;
-    const c = peer.connect(ROOM_PREFIX + code, { reliable: true, serialization: 'json', metadata: { name: myName() } });
+    const c = peer.connect(ROOM_PREFIX + code, { reliable: true, serialization: 'json', metadata: { name: myName(), look: myLook() } });
     Net.host = c;
     c.on('open', () => {
       if (Net.host !== c) return;
@@ -218,7 +234,8 @@ function guestData(d) {
   if (d.k === 'roster') {
     Net.me = d.you | 0; Net.n = clamp(d.n | 0, 2, MAX_PLAYERS);
     Net.names = (Array.isArray(d.names) ? d.names : []).slice(0, MAX_PLAYERS).map(cleanName);
-    padOwners(); lobbyRender();
+    Net.looks = (Array.isArray(d.looks) ? d.looks : []).slice(0, MAX_PLAYERS).map(cleanLook);
+    padOwners(); seatChanged(); lobbyRender();
   }
   else if (d.k === 's') { if (G.state === 'playing' || G.state === 'paused') { applyState(d.s); (d.e || []).forEach(replay); } }
   else if (d.k === 'start') guestStart(d);
@@ -257,7 +274,11 @@ function applyState(s, hard) {
   if (hard || ex * ex + ey * ey > 90 * 90) { r.x = s[0]; r.y = s[1]; } else { r.x += ex * 0.35; r.y += ey * 0.35; }
   if (hard || Math.abs(ea) > 1.2) r.ang = s[4]; else r.ang += ea * 0.35;
   r.vx = s[2]; r.vy = s[3]; r.w = s[5]; r.scale = s[6];
-  for (let i = 0; i < 4; i++) r.riders[i].gas = s[7 + i];
+  for (let i = 0; i < 4; i++) {
+    const rd = r.riders[i], pos = s[20 + i];
+    rd.gas = s[7 + i];
+    if (isFinite(pos)) { const e = wrapA(pos - rd.pos); rd.pos = hard || Math.abs(e) > 1.5 ? pos : wrapA(rd.pos + e * 0.5); }
+  }
   G.hearts = s[11]; G.beans = s[12]; G.invuln = s[13]; G.t = s[14];
   G.simTime = hard || Math.abs(s[15] - G.simTime) > 0.3 ? s[15] : G.simTime + (s[15] - G.simTime) * 0.3;
   G.started = !!s[16];
@@ -267,7 +288,7 @@ function applyState(s, hard) {
 }
 function replay(e) {
   const k = e[0];
-  if (k === 't') { G.started = true; G.toots++; tootFx(e[1] & 3, e[2] & 3); }
+  if (k === 't') { G.started = true; G.toots++; tootFx(e[1] & 3, e[2] & 3); }   // pig number, toot kind
   else if (k === 's') { if (SOUND_EVENTS.indexOf(e[1]) >= 0) Sound[e[1]](e[2]); }
   else if (k === 'q') G.quip = { text: String(e[1]), rider: e[2] | 0, life: 1.9 };
   else if (k === 'f') flash(String(e[1]));
@@ -297,15 +318,15 @@ function guestStep(dt) {
 function requestToot(i) {
   if (G.state !== 'playing') return;
   if (!mine(i)) { nudgePad(i); return; }
-  if (Net.mode === 'guest') { if (!G.ending) { netSend({ k: 'toot', i }); flashPad(i); } return; }
-  toot(i);
+  if (Net.mode === 'guest') { if (!G.ending) { netSend({ k: 'toot' }); flashPad(i); } return; }
+  if (!G.ending) toot(i);
 }
 function requestDir(x, y) {
   if (Net.mode === 'guest') {
     if (G.state === 'playing' && !G.ending) netSend({ k: 'dir', x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 });
     return;
   }
-  autoToot(x, y, Net.me);
+  sendPig(Net.me, x, y);
 }
 
 /* ---------- Keep-alive ---------- */
@@ -329,7 +350,6 @@ function playerName(p) {
   if (p !== Net.me) return nameOf(p);
   return myName() ? myName() + ' (you)' : 'You';
 }
-function myPigs() { return RIDERS.filter((R, i) => mine(i)); }
 function lobbyRender() {
   if (G.state !== 'lobby') return;
   const err = !!Net.err, ready = Net.mode === 'host' ? !!(Net.peer && Net.peer.open) : Net.joined;
@@ -345,8 +365,8 @@ function lobbyRender() {
     for (let p = 0; p < MAX_PLAYERS; p++) {
       const row = document.createElement('div');
       if (p < Net.n) {
-        row.innerHTML = '<b></b><span>' + RIDERS.map((R, i) => owner(i) === p
-          ? '<i class="dot" style="--c:' + R.color + ';--cd:' + R.dark + '">' + R.key + ' ' + R.name + '</i>' : '').join('') + '</span>';
+        const R = RIDERS[p];
+        row.innerHTML = '<b></b><span><i class="dot" style="--c:' + R.color + ';--cd:' + R.dark + '">' + R.colour + ' pig</i></span>';
         row.firstChild.textContent = playerName(p);   // names are typed by players: never treat them as HTML
       } else {
         row.className = 'wait';
@@ -372,40 +392,44 @@ function lobbyRender() {
   $('btnLeave').textContent = err || Net.mode === 'solo' ? 'Back to menu' : 'Leave';
   $('btnRetry').classList.toggle('hidden', !(err && retryCode));
 }
-// Friends' pigs are dimmed and show whose they are
+// Name tags over every pig on the raft, and your name on the pad
 function padOwners() {
   if (typeof padBtns === 'undefined') return;
-  padBtns.forEach((pb, i) => {
-    pb.el.classList.toggle('theirs', !mine(i));
-    pb.nm.textContent = mine(i) ? RIDERS[i].name : RIDERS[i].name + ' · ' + nameOf(owner(i));
-  });
-  // name tags over the pigs once friends are on board
-  if (R3D.setBadges) R3D.setBadges(online() && Net.n > 1 ? RIDERS.map((R, i) => badgeName(owner(i))) : null);
+  padColours();
+  if (R3D.setBadges) R3D.setBadges(RIDERS.map((R, i) => (i < pigCount() ? badgeName(i) : '')));
 }
 function badgeName(p) {
   const n = p === Net.me && !myName() ? 'You' : nameOf(p);
   return n.length > 10 ? n.slice(0, 9) + '…' : n;
 }
 function nudgePad(i) {
-  const el = padBtns[i].el;
-  el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope');
   if (G.quipCd <= 0) { G.quip = { text: 'That is ' + nameOf(owner(i)) + '\'s pig!', rider: i, life: 1.2 }; G.quipCd = 1.2; }
 }
 function onlineHint() {
-  const pigs = myPigs();
-  return 'You toot ' + pigs.map(R => R.name + ' (' + R.key + ')').join(' and ') + '. Tap them or tap the water.';
+  return 'You are the ' + RIDERS[Net.me].colour + ' pig. Tap the water or the arrows to push, tap your pig to toot.';
+}
+// A new name or outfit reaches everyone on the raft
+function lookChanged() {
+  if (Net.mode === 'host') rosterChanged(0);
+  else if (Net.mode === 'guest') netSend({ k: 'name', name: myName(), look: myLook() });
 }
 
 $('btnFriends').addEventListener('click', () => { Sound.unlock(); hostRoom(); });
 $('btnLeave').addEventListener('click', leaveRoom);
 $('btnRetry').addEventListener('click', () => { if (retryCode) joinRoom(retryCode); });
-$('onName').addEventListener('input', e => {
-  save.name = cleanName(e.target.value); writeSave();
-  if (Net.mode === 'host') rosterChanged(0);
-  else if (Net.mode === 'guest') { netSend({ k: 'name', name: myName() }); padOwners(); lobbyRender(); }
+['onName', 'menuName', 'wardName'].forEach(id => {
+  const box = $(id);
+  box.value = myName();
+  box.addEventListener('input', e => {
+    save.name = cleanName(e.target.value); writeSave();
+    if (Net.mode === 'host') rosterChanged(0);
+    else if (Net.mode === 'guest') { lookChanged(); lobbyRender(); }
+    padOwners();
+    if (G.state === 'wardrobe') buildWardrobe();
+  });
+  box.addEventListener('change', e => { e.target.value = myName(); ['onName', 'menuName', 'wardName'].forEach(o => { if (o !== id) $(o).value = myName(); }); });
+  box.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); });
 });
-$('onName').addEventListener('change', e => { e.target.value = myName(); });
-$('onName').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
 $('btnShare').addEventListener('click', async () => {
   Sound.unlock();
   const url = shareUrl(), btn = $('btnShare');

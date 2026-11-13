@@ -78,7 +78,12 @@
   .rider .arrow { width: 26px; height: 26px; display: grid; place-items: center; }
   .rider .arrow svg { width: 26px; height: 26px; }
   .rider .nm { font-size: 13px; }
-  .rider .gas { display: flex; gap: 3px; width: 70%; }
+  .rider .gas { display: flex; gap: 3px; width: 80%; }
+  #pad { grid-template-columns: 1fr 1fr 1.6fr 1fr 1fr; --c: #8fb4ff; --cd: #3b6fd6; }
+  .rider.dir { justify-content: center; }
+  .rider.dir .arrow, .rider.dir .arrow svg { width: 30px; height: 30px; }
+  .rider.me { justify-content: center; gap: 8px; }
+  #pad.empty .rider.me { filter: saturate(.35) brightness(.95); }
   .rider .gas i { flex: 1; height: 6px; border-radius: 3px; background: rgba(31,42,68,.18); overflow: hidden; position: relative; }
   .rider .gas i b { position: absolute; inset: 0; width: 0; background: #b5f23b; border-radius: 3px; }
 
@@ -120,7 +125,7 @@
   .lvl .st .off { color: rgba(31,42,68,.15); }
   .unlock small { font-weight: 700; opacity: .7; }
   .btn small { display: block; font-size: 12px; font-weight: 700; opacity: .7; }
-  .pigs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 4px; }
+  .pigs { display: grid; grid-template-columns: 120px; justify-content: center; gap: 8px; margin: 10px 0 4px; }
   .pig { border: 0; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 4px 0 rgba(31,42,68,.18);
     font-weight: 800; font-size: 13px; }
   .pig.on { background: var(--c); box-shadow: 0 4px 0 var(--cd); }
@@ -137,6 +142,8 @@
   /* Play with friends */
   .link { background: #fff; border-radius: 12px; padding: 10px 12px; font: 700 13px ui-monospace, Menlo, monospace; word-break: break-all;
     -webkit-user-select: text; user-select: text; text-align: left; }
+  #menuNameBox { margin: 4px 0 2px; }
+  #menuNameBox input { padding: 7px 12px; }
   .namebox { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-weight: 900; font-size: 14px; text-align: left; white-space: nowrap; }
   .namebox input { flex: 1; min-width: 0; border: 3px solid rgba(31,42,68,.15); border-radius: 12px; padding: 9px 12px;
     font: inherit; font-size: 16px; font-weight: 800; color: var(--ink); background: #fff; -webkit-user-select: text; user-select: text; touch-action: auto; }
@@ -155,7 +162,7 @@
 
   @media (max-height: 560px) {
     .rider { height: 58px; }
-    .rider .nm { display: none; }
+    .rider:not(.me) .nm { display: none; }
     #hint { bottom: calc(env(safe-area-inset-bottom) + 84px); }
     h1 { font-size: 34px; }
   }
@@ -180,6 +187,7 @@
   @media (max-height: 560px) {
     #scrMenu h1 { font-size: 38px; -webkit-text-stroke-width: 6px; }
     #scrMenu .tag { display: none; }
+    #menuNameBox input { padding: 4px 10px; }
     #scrMenu .btn { padding: 10px; }
     #scrMenu .lvl { padding: 5px 4px; }
     #scrMenu .lvl b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -228,9 +236,10 @@
 <section id="scrMenu" class="screen">
   <div class="logo">
     <h1>Toot Raft</h1>
-    <div class="tag">Four friends. One raft. Zero shame.</div>
+    <div class="tag">One pig. One raft. Zero shame.</div>
   </div>
   <div class="card">
+    <label class="namebox" id="menuNameBox">Your name <input id="menuName" maxlength="14" placeholder="Name your pig" autocomplete="nickname" enterkeyhint="done"></label>
     <button class="btn" id="btnStart">Start</button>
     <button class="btn alt" id="btnFriends">Play with friends<small>Share a link · up to 4 players</small></button>
     <div class="row">
@@ -241,18 +250,18 @@
     <details class="howto">
       <summary>How to play</summary>
       <div class="how">
-        <p>Every rider's <b>toot pushes the raft the other way</b>.</p>
-        <p>The raft keeps <b>spinning</b>, so watch who is at the back.</p>
+        <p>Your pig's <b>toot pushes the raft the other way</b>.</p>
+        <p>Pick a way to go and your pig <b>runs round the raft</b> to the far side, then toots.</p>
         <p><b>Spikes pop a heart.</b> Soft green walls are safe to bump.</p>
         <p>Grab <b>beans</b> to refill gas. Reach the finish fast.</p>
-        <p>Toot the <b>same pig 3 times fast</b> for a ROCKET TOOT.</p>
+        <p>Toot <b>3 times fast from the same spot</b> for a ROCKET TOOT.</p>
         <p><b>3 stars</b>: finish, lose no hearts, beat par. Stars open rivers 4 to 6.</p>
         <p>Pop after the <b>halfway checkpoint</b>? Continue from there once.</p>
         <p>Finish the <b>Daily river</b> every day for a streak and bonus beans.</p>
       </div>
       <div class="keys">
-        Tap a rider or the buttons · <kbd>1</kbd>–<kbd>4</kbd> toot that rider<br>
-        <kbd>Arrows</kbd>/<kbd>WASD</kbd> or tap the water: best rider toots that way<br>
+        <kbd>Arrows</kbd>/<kbd>WASD</kbd>, the arrow buttons or tap the water: push that way<br>
+        Tap your pig or <kbd>Space</kbd>: toot on the spot<br>
         <kbd>P</kbd> pause · <kbd>R</kbd> restart
       </div>
     </details>
@@ -263,6 +272,7 @@
   <div class="card">
     <h2>Wardrobe</h2>
     <div class="tag" id="wardBeans"></div>
+    <label class="namebox">Your name <input id="wardName" maxlength="14" placeholder="Name your pig" autocomplete="nickname" enterkeyhint="done"></label>
     <div class="pigs" id="wardPigs"></div>
     <div class="wlabel">Hats</div>
     <div class="opts" id="wardHats"></div>
@@ -324,8 +334,10 @@ const TOOT_IMPULSE = 140;     // velocity change per toot
 const WATER_DRAG = 0.85;      // how fast the raft settles to the current
 const CURRENT = 22;           // gentle downstream push
 const MAX_SPEED = 420;
-const GAS_MAX = 3;            // toots stored per rider
-const GAS_RECHARGE = 1.0;     // seconds to regain one toot
+const GAS_MAX = 6;            // toots stored per pig (one pig per player)
+const GAS_RECHARGE = 0.4;     // seconds to regain one toot
+const RUN_SPEED = 7.5;        // how fast a pig runs round the raft edge (radians a second)
+const TOOT_REACH = 0.3;       // a pig this close to the right spot toots straight away
 const MAX_HEARTS = 3;
 const INVULN = 1.4;
 const START_WALL = -90;       // dock behind the start line
@@ -333,13 +345,15 @@ const SPIKE_IN = 16;          // spiked walls reach further into the water
 const BUMP_IN = 7;
 const STEP = 1 / 120;         // fixed physics step
 
+// One pig per player: player 1 rides the blue pig, friends get red, yellow and teal.
+// color/dark = team colour (buttons, badges); fur/furDark = skin in the sprites
 const RIDERS = [
-  // color/dark = team colour (buttons, badges); fur/furDark = skin in the sprites
-  { name: 'Pip', animal: 'pig', color: '#8fb4ff', dark: '#3b6fd6', fur: '#ffa8c2', furDark: '#d9668c', key: '1' },
-  { name: 'Ham', animal: 'pig', color: '#ff8a8f', dark: '#c8383f', fur: '#f59bb5', furDark: '#cc5a80', key: '2' },
-  { name: 'Bun', animal: 'pig', color: '#ffd54a', dark: '#d99a12', fur: '#ffb9a8', furDark: '#d9786a', key: '3' },
-  { name: 'Lou', animal: 'pig', color: '#5fe0d3', dark: '#1f9a8f', fur: '#f0a6c8', furDark: '#c0628f', key: '4' },
+  { colour: 'blue', animal: 'pig', color: '#8fb4ff', dark: '#3b6fd6', fur: '#ffa8c2', furDark: '#d9668c' },
+  { colour: 'red', animal: 'pig', color: '#ff8a8f', dark: '#c8383f', fur: '#f59bb5', furDark: '#cc5a80' },
+  { colour: 'yellow', animal: 'pig', color: '#ffd54a', dark: '#d99a12', fur: '#ffb9a8', furDark: '#d9786a' },
+  { colour: 'teal', animal: 'pig', color: '#5fe0d3', dark: '#1f9a8f', fur: '#f0a6c8', furDark: '#c0628f' },
 ];
+const pigCount = () => (online() ? Net.n : 1);
 
 const LEVELS = [
   { name: 'Lazy Creek',   length: 3200, seed: 11, amp: 110, width: [150, 180], spikeFrac: 0.3,
@@ -591,7 +605,7 @@ const Sound = {
     return true;
   },
   toot(i) {
-    // each rider has their own pitch: Pip deep, Lou squeaky
+    // each pig has their own pitch: blue deep, teal squeaky
     const rate = [0.82, 1, 1.15, 1.32][i] * (0.94 + Math.random() * 0.12);
     if (!this.playClip(this.clips && this.clips.toot, rate, 0.9, 0.9)) this.synthToot(i);
     this.freshen();
@@ -760,7 +774,7 @@ const G = {
   parts: [], rings: [], ringTimer: 0, shake: 0, loc: null,
   runTotal: 0, lastResult: null,
   quip: null, quipCd: 0, flash: null, flashCd: 0, recent: [], prevD: 0,
-  def: null, combo: { rider: -1, n: 0, t: -9 },
+  def: null, combo: { rider: -1, n: 0, t: -9, pos: 0 },
 };
 
 /* =========================================================
@@ -795,12 +809,15 @@ function say(text, rider, force) {
 }
 function flash(text) { G.flash = { text, life: 1.7 }; emit('f', text); }
 
+const TAU4 = Math.PI / 2;
+const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
 function newRaft(T) {
   return {
     x: T.cx(40), y: -40, vx: 0, vy: 0,
-    ang: Math.PI / 2,   // rider 1 (Pip) starts at the back
+    ang: Math.PI / 2,   // the first pig starts at the back
     w: 0, scale: 1,
-    riders: RIDERS.map(() => ({ gas: GAS_MAX, anim: 0, fizz: 0 })),
+    // pos: where the pig stands on the raft edge (angle on the raft); goal: the spot it is running to (angle on the river)
+    riders: RIDERS.map((_, i) => ({ gas: GAS_MAX, anim: 0, fizz: 0, pos: i * TAU4 * 4 / Math.max(1, pigCount()), goal: null, dir: 0 })),
   };
 }
 
@@ -814,7 +831,7 @@ function loadLevel(i, dailyKey) {
   G.t = 0; G.simTime = 0; G.started = false; G.hearts = MAX_HEARTS; G.beans = 0;
   G.invuln = 0; G.ending = null; G.toots = 0; G.parts.length = 0; G.rings.length = 0; G.shake = 0;
   G.quip = null; G.quipCd = 0; G.flash = null; G.flashCd = 0; G.recent.length = 0; G.prevD = G.loc.d;
-  G.combo = { rider: -1, n: 0, t: -9 };
+  G.combo = { rider: -1, n: 0, t: -9, pos: 0 };
   G.continued = false; G.passedCheck = false;
   G.track.hazards.forEach(h => (h.inside = false));
   R3D.buildLevel(G.track);
@@ -835,7 +852,7 @@ function startLevel(i, freshRun) {
 function showHint() {
   const i = G.level;
   UI.hint.textContent = online() && Net.n > 1 ? onlineHint()
-    : i === 0 ? 'Pip is at the back. Press 1 or tap Pip to toot forward.'
+    : i === 0 ? 'Tap the water ahead or press ↑. Your pig runs to the back and toots you forward.'
     : i === DAILY ? 'Daily river for ' + fmtDay(G.def.daily) + '. Same course for everyone today.'
     : G.def.hint || G.def.name + ': watch the spin and time the gates.';
   UI.hint.classList.remove('hidden');
@@ -845,7 +862,7 @@ function showHint() {
 /* =========================================================
    Actions
    ========================================================= */
-function riderAngle(i) { return G.raft.ang + i * Math.PI / 2; }
+function riderAngle(i) { return G.raft.ang + G.raft.riders[i].pos; }
 
 function toot(i) {
   if (G.state !== 'playing' || G.ending) return false;
@@ -853,10 +870,11 @@ function toot(i) {
   // every press farts: a rider out of gas squeezes out a weak little squeaker instead
   const weak = rd.gas < 1;
   if (!weak) rd.gas -= 1;
-  // the same pig three times in quick succession = ROCKET TOOT
-  if (!weak && G.combo.rider === i && G.simTime - G.combo.t < 0.9) G.combo.n++;
+  rd.goal = null;
+  // three toots in quick succession from the same spot = ROCKET TOOT
+  if (!weak && G.combo.rider === i && G.simTime - G.combo.t < 0.9 && Math.abs(wrapA(rd.pos - G.combo.pos)) < 0.6) G.combo.n++;
   else G.combo.n = weak ? 0 : 1;
-  G.combo.rider = i; G.combo.t = G.simTime;
+  G.combo.rider = i; G.combo.t = G.simTime; G.combo.pos = rd.pos;
   const rocket = G.combo.n >= 3;
   if (rocket) G.combo.n = 0;
   // now and then a toot comes out as a MEGA TOOT: bigger push, bigger cloud, longer sound
@@ -911,22 +929,24 @@ function tootFx(i, kind) {
   flashPad(i);
 }
 
-// Toot whichever rider pushes closest to the wanted direction.
-// Online, only the pigs of player p (default: this device's player) can answer.
-function autoToot(dx, dy, p) {
-  if (G.state !== 'playing' || G.ending) return;
+// Push the raft towards (dx, dy): pig p runs round the raft edge to the far side, then toots.
+function sendPig(p, dx, dy) {
+  if (G.state !== 'playing' || G.ending || p < 0 || p >= pigCount()) return;
   const len = Math.hypot(dx, dy); if (len < 1e-6) return;
-  dx /= len; dy /= len;
-  // prefer a well-aimed rider with gas; otherwise the best-aimed one does a weak squeaker
-  let best = -1, bestDot = -2, full = -1, fullDot = 0.3;
-  if (p === undefined) p = Net.me;
-  for (let i = 0; i < 4; i++) {
-    if (online() && owner(i) !== p) continue;
-    const a = riderAngle(i), dot = -(Math.cos(a) * dx + Math.sin(a) * dy);
-    if (dot > bestDot) { bestDot = dot; best = i; }
-    if (G.raft.riders[i].gas >= 1 && dot > fullDot) { fullDot = dot; full = i; }
-  }
-  if (full >= 0 || best >= 0) toot(full >= 0 ? full : best);
+  const rd = G.raft.riders[p];
+  rd.goal = Math.atan2(-dy / len, -dx / len);   // a toot pushes away from the pig's side
+  rd.dir = 0;
+  runPig(p, 0);
+}
+function autoToot(dx, dy, p) { sendPig(p === undefined ? Net.me : p, dx, dy); }
+function runPig(i, dt) {
+  const rd = G.raft.riders[i];
+  if (rd.goal === null) return;
+  const diff = wrapA(rd.goal - riderAngle(i));
+  if (Math.abs(diff) <= TOOT_REACH) { toot(i); return; }
+  // pick the short way round once, so a half-turn does not flip back and forth as the raft spins
+  if (!rd.dir || Math.abs(diff) < Math.PI - 0.4) rd.dir = Math.sign(diff);
+  rd.pos = wrapA(rd.pos + rd.dir * Math.min(Math.abs(diff), RUN_SPEED * dt));
 }
 
 function hurt(nx, ny) {
@@ -938,7 +958,7 @@ function hurt(nx, ny) {
   if (G.hearts <= 0) {
     G.ending = { type: 'pop', t: 0 };
     sfx('pop'); flash('TOO MUCH PRESSURE!'); G.quip = null;
-  } else { sfx('hurt'); say(pick(QUIPS.hurt), Math.floor(Math.random() * 4), true); }
+  } else { sfx('hurt'); say(pick(QUIPS.hurt), Math.floor(Math.random() * pigCount()), true); }
 }
 
 function hit(nx, ny, harmful, e) {
@@ -1046,10 +1066,10 @@ function collectBeans() {
     const dx = r.x - b.x, dy = r.y - b.y;
     if (dx * dx + dy * dy < (RAFT_R + 12) * (RAFT_R + 12)) {
       b.got = true; G.beans++; emit('g', j);
-      r.riders.forEach(rd => (rd.gas = Math.min(GAS_MAX, rd.gas + 1)));
+      r.riders.forEach(rd => (rd.gas = Math.min(GAS_MAX, rd.gas + 2)));
       burst(b.x, b.y, 8, ['#ffb347', '#ffd54a', '#ffffff']);
       sfx('bean');
-      if (Math.random() < 0.35) say(pick(QUIPS.bean), Math.floor(Math.random() * 4));
+      if (Math.random() < 0.35) say(pick(QUIPS.bean), Math.floor(Math.random() * pigCount()));
     }
   });
 }
@@ -1064,6 +1084,7 @@ function step(dt) {
   }
   if (G.started && !G.ending) G.t += dt;
   if (G.invuln > 0) G.invuln -= dt;
+  if (!G.ending) for (let i = 0; i < pigCount(); i++) runPig(i, dt);
 
   // water: drag towards the current
   const f = G.loc.f, k = 1 - Math.exp(-WATER_DRAG * dt);
@@ -1177,7 +1198,7 @@ function continueRun() {
   offerReward(() => {
     const d = checkpointD(), p = G.track.point(d, 0), f = G.track.frame(d), r = G.raft;
     r.x = p.x; r.y = p.y; r.vx = f.fx * CURRENT; r.vy = f.fy * CURRENT; r.w = 0; r.scale = 1; r.ang = Math.PI / 2;
-    r.riders.forEach(rd => { rd.gas = GAS_MAX; rd.anim = 0; rd.fizz = 0; });
+    r.riders.forEach(rd => { rd.gas = GAS_MAX; rd.anim = 0; rd.fizz = 0; rd.goal = null; });
     G.loc = G.track.toLocal(r.x, r.y); G.prevD = G.loc.d;
     G.hearts = MAX_HEARTS; G.invuln = 2; G.ending = null; G.continued = true; G.shake = 0;
     G.parts.length = 0; G.rings.length = 0; G.quip = null;
@@ -1254,20 +1275,39 @@ const UI = {
   levels: $('levels'), mute: $('btnMute'),
 };
 const ARROW_SVG = '<svg viewBox="0 0 26 26"><path d="M13 3 L21 13 H16 V23 H10 V13 H5 Z" fill="#1f2a44"/></svg>';
-const padBtns = RIDERS.map((R, i) => {
+// The pad: your pig's name and gas tank (tap it to toot on the spot), and four arrows that push the raft that way
+const PAD_DIRS = [['Left', -1, 0, -90], ['Forward', 0, -1, 0], ['Back', 0, 1, 180], ['Right', 1, 0, 90]];
+const padGas = (() => {
   const b = document.createElement('button');
-  b.className = 'rider';
-  b.style.setProperty('--c', R.color); b.style.setProperty('--cd', R.dark);
-  b.setAttribute('aria-label', 'Toot ' + R.name);
-  b.innerHTML = '<div class="top"><span class="num">' + R.key + '</span><span class="arrow">' + ARROW_SVG +
-    '</span></div><span class="nm">' + R.name + '</span><span class="gas"><i><b></b></i><i><b></b></i><i><b></b></i></span>';
-  b.addEventListener('pointerdown', e => { e.preventDefault(); Sound.unlock(); requestToot(i); });
+  b.className = 'rider me';
+  b.setAttribute('aria-label', 'Toot on the spot');
+  b.innerHTML = '<span class="nm"></span><span class="gas">' + '<i><b></b></i>'.repeat(GAS_MAX) + '</span>';
+  b.addEventListener('pointerdown', e => { e.preventDefault(); Sound.unlock(); requestToot(Net.me); });
+  return { el: b, nm: b.querySelector('.nm'), gas: [...b.querySelectorAll('.gas b')] };
+})();
+const padBtns = PAD_DIRS.map(([label, kx, ky, deg], j) => {
+  const b = document.createElement('button');
+  b.className = 'rider dir';
+  b.setAttribute('aria-label', 'Push ' + label.toLowerCase());
+  b.innerHTML = '<span class="arrow" style="transform:rotate(' + deg + 'deg)">' + ARROW_SVG + '</span>';
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault(); Sound.unlock();
+    const v = R3D.keyDir(kx, ky); requestDir(v.x, v.y);
+    b.classList.add('pressed'); setTimeout(() => b.classList.remove('pressed'), 90);
+  });
+  if (j === 2) UI.pad.appendChild(padGas.el);
   UI.pad.appendChild(b);
-  return { el: b, nm: b.querySelector('.nm'), arrow: b.querySelector('.arrow'), gas: [...b.querySelectorAll('.gas b')] };
+  return { el: b };
 });
 function flashPad(i) {
-  const el = padBtns[i].el; el.classList.add('pressed');
+  if (i !== Net.me) return;
+  const el = padGas.el; el.classList.add('pressed');
   setTimeout(() => el.classList.remove('pressed'), 90);
+}
+function padColours() {
+  const R = RIDERS[Net.me] || RIDERS[0];
+  UI.pad.style.setProperty('--c', R.color); UI.pad.style.setProperty('--cd', R.dark);
+  padGas.nm.textContent = badgeName(Net.me);
 }
 
 function setMuteIcon() {
@@ -1298,35 +1338,33 @@ function buildLevelButtons() {
   $('btnWardrobe').innerHTML = 'Wardrobe<small>' + (save.beanBank || 0) + ' beans</small>';
 }
 
-let wardPig = 0;
+// Your wardrobe dresses your pig (kept in save.looks[0]); online, friends see it too
 function setLook(i, key, value) {
-  if (!save.looks) save.looks = RIDERS.map((_, j) => lookOf(j));
-  save.looks[i] = Object.assign({}, lookOf(i), { [key]: value });
+  if (!save.looks) save.looks = [];
+  save.looks[0] = Object.assign({}, myLook(), { [key]: value });
   writeSave();
   R3D.refreshLooks();
+  lookChanged();
 }
 function buildWardrobe() {
   const bank = save.beanBank || 0;
   $('wardBeans').textContent = 'Beans collected: ' + bank + '. Collect more to unlock more.';
   const pigs = $('wardPigs');
   pigs.innerHTML = '';
-  RIDERS.forEach((R, i) => {
-    const b = document.createElement('button');
-    b.className = 'pig' + (i === wardPig ? ' on' : '');
-    b.style.setProperty('--c', R.color); b.style.setProperty('--cd', R.dark);
-    b.appendChild(R3D.pigPreview(i));
-    b.appendChild(document.createTextNode(R.key + ' · ' + R.name));
-    b.addEventListener('click', () => { wardPig = i; buildWardrobe(); });
-    pigs.appendChild(b);
-  });
+  const b = document.createElement('div');
+  b.className = 'pig on';
+  b.style.setProperty('--c', RIDERS[0].color); b.style.setProperty('--cd', RIDERS[0].dark);
+  b.appendChild(R3D.pigPreview(0));
+  b.appendChild(document.createTextNode(myName() || 'Your pig'));
+  pigs.appendChild(b);
   const options = (el, list, key) => {
     el.innerHTML = '';
     list.forEach(o => {
       const b = document.createElement('button'), locked = bank < o.cost;
-      b.className = 'opt' + (lookOf(wardPig)[key] === o.id ? ' on' : '');
+      b.className = 'opt' + (myLook()[key] === o.id ? ' on' : '');
       b.disabled = locked;
       b.innerHTML = o.name + '<small>' + (locked ? 'Needs ' + o.cost + ' beans' : o.cost ? 'Unlocked' : 'Free') + '</small>';
-      b.addEventListener('click', () => { setLook(wardPig, key, o.id); buildWardrobe(); });
+      b.addEventListener('click', () => { setLook(0, key, o.id); buildWardrobe(); });
       el.appendChild(b);
     });
   };
@@ -1422,6 +1460,7 @@ function setState(s) {
   const inGame = s === 'playing' || s === 'paused';
   UI.hud.classList.toggle('hidden', !inGame);
   UI.pad.classList.toggle('hidden', s !== 'playing');
+  if (s === 'playing' || s === 'menu') padOwners();
   if (s !== 'playing') UI.hint.classList.add('hidden');
   if (s === 'menu') buildLevelButtons();
   if ((s === 'menu' || s === 'lobby') && !G.track) loadLevel(0);
@@ -1450,17 +1489,12 @@ function updateHud() {
     UI.progFill.style.width = (p * 100) + '%';
     UI.progRaft.style.left = (p * 100) + '%';
   });
-  for (let i = 0; i < 4; i++) {
-    const rd = G.raft.riders[i], pb = padBtns[i];
-    // arrow shows which way this rider would push the raft right now
-    const deg = R3D.pushScreenAngle(riderAngle(i));
-    pb.arrow.style.transform = 'rotate(' + deg.toFixed(1) + 'deg)';
-    for (let s = 0; s < GAS_MAX; s++) {
-      const v = Math.round(clamp(rd.gas - s, 0, 1) * 20);
-      set('g' + i + s, v, () => (pb.gas[s].style.width = (v * 5) + '%'));
-    }
-    set('e' + i, rd.gas < 1, v => pb.el.classList.toggle('empty', v));
+  const rd = G.raft.riders[Net.me] || G.raft.riders[0];
+  for (let s = 0; s < GAS_MAX; s++) {
+    const v = Math.round(clamp(rd.gas - s, 0, 1) * 20);
+    set('g' + s, v, () => (padGas.gas[s].style.width = (v * 5) + '%'));
   }
+  set('e', rd.gas < 1, v => UI.pad.classList.toggle('empty', v));
 }
 
 // Online, a pause stops the raft for everyone, and anyone can resume it.
@@ -1498,9 +1532,7 @@ window.addEventListener('keydown', e => {
   const code = e.code;
   if (G.state === 'playing') {
     if (e.repeat) return;
-    const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code);
-    const np = ['Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'].indexOf(code);
-    if (n >= 0 || np >= 0) { requestToot(n >= 0 ? n : np); e.preventDefault(); return; }
+    if (code === 'Space') { requestToot(Net.me); e.preventDefault(); return; }   // toot on the spot
     if (DIRS[code]) { const v = R3D.keyDir(DIRS[code][0], DIRS[code][1]); requestDir(v.x, v.y); e.preventDefault(); return; }
     if (code === 'KeyP' || code === 'Escape') { pauseGame(); return; }
     if (code === 'KeyR' && Net.mode !== 'guest') { startLevel(G.level, G.level === 0); return; }
@@ -1524,7 +1556,7 @@ canvas.addEventListener('pointerdown', e => {
   Sound.unlock();
   if (G.state !== 'playing') return;
   const hit = R3D.pick(e.clientX, e.clientY);
-  if (hit.rider >= 0) requestToot(hit.rider);   // tapped on a pig: that pig toots
+  if (hit.rider >= 0) requestToot(hit.rider);   // tapped your pig: it toots on the spot
   else requestDir(hit.x, hit.y);               // tapped open water: push towards it
 });
 
@@ -1565,7 +1597,7 @@ requestAnimationFrame(frame);
 if (roomFromUrl() && $('btnFriends').className.indexOf('hidden') < 0) joinRoom(roomFromUrl());
 
 // Hooks for automated testing
-window.TootRaft = { G, Net, hostRoom, joinRoom, leaveRoom, requestToot, requestDir, LEVELS, RIDERS, QUIPS, DAILY, HATS, OUTFIT_SKINS, save: () => save, setLook, todayKey, toot, autoToot, step, startLevel, setState, riderAngle, resultAction, buildTrack, gateOpen, R3D, Sound };
+window.TootRaft = { G, Net, hostRoom, joinRoom, leaveRoom, requestToot, requestDir, sendPig, pigCount, LEVELS, RIDERS, QUIPS, DAILY, HATS, OUTFIT_SKINS, save: () => save, setLook, todayKey, toot, autoToot, step, startLevel, setState, riderAngle, resultAction, buildTrack, gateOpen, R3D, Sound };
 </script>
 </body>
 </html>

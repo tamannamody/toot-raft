@@ -1,9 +1,25 @@
 {
   "title": "Toot Raft",
   "maker": "Tamanna Tahseen",
-  "one_line": "Four pigs on a spinning raft, one spiky river, and nothing but toots to steer with.",
+  "one_line": "One pig on a spinning raft, one spiky river, and nothing but toots to steer with.",
   "category": "arcade",
   "github": "tamannamody",
-  "how_to_play": "Press 1 2 3 4 or tap a pig to toot and push the raft away from its side; arrow keys, WASD or tapping the water push the raft that way; toot the same pig 3 times fast for a ROCKET TOOT.",
-  "description": "Pip, Ham, Bun and Lou are stuck on a round raft drifting down a river lined with spiky walls, logs, whirlpools and mines. Each pig toots out of its own side, so every toot spins and shoves the raft. Grab beans, dodge hazards and reach the finish across three rivers (Lazy Creek, Spiky Bends and Gas Gauntlet) plus a fresh Daily River every day. Spend lifetime beans in the Wardrobe on hats and outfits for each pig. Works on phones and computers. Tap Play with friends to share a link: up to four players ride one raft, each tooting their own pigs."
+  "how_to_play": "Tap the water or an arrow (or use arrow keys/WASD) and your pig runs round the raft to toot you that way; tap your pig or press Space to toot on the spot; 3 fast toots from the same spot make a ROCKET TOOT.",
+  "description": "Your pig is stuck on a round raft drifting down a river lined with spiky walls, logs, whirlpools and mines. A toot shoves the raft the other way, so pick where you want to go and your pig runs round the edge of the raft to the far side, then toots. The raft keeps spinning, so timing is everything.\n\nGrab beans, dodge hazards and reach the finish across six rivers, from Lazy Creek to The Big Stink, plus a fresh Daily River every day. Beans also refill your gas, so you can keep tooting. Spikes pop one of your hearts, but the soft green walls are safe to bump. Toot three times fast from the same spot for a ROCKET TOOT.\n\nEach river gives up to three stars: one for finishing, one for keeping all your hearts and one for beating the time. Stars open the later rivers, your best score is saved, and finishing the Daily River on days in a row builds a streak with bonus beans.\n\nType your name and it rides above your pig. Spend lifetime beans in the Wardrobe on hats and outfits. Works on phones and computers. Tap Play with friends to share a link: up to four players ride one raft, each steering their own pig.",
+  "controls": [
+    "Phone: tap the water or an arrow button to push the raft that way",
+    "Your pig runs round the raft to the far side, then toots",
+    "Tap your pig (or its name button) to toot on the spot",
+    "Computer: arrow keys or WASD push the raft; Space toots on the spot",
+    "Toot 3 times fast from the same spot for a ROCKET TOOT",
+    "P pauses, R restarts"
+  ],
+  "tips": [
+    "Pick your way early: your pig needs a moment to run round the raft",
+    "Soft green walls are safe to bump; spikes pop a heart",
+    "Grab beans to keep your gas topped up",
+    "Keep all your hearts and beat the time for three stars",
+    "Come back every day for a new Daily River and keep your streak going"
+  ],
+  "story": "I wanted to make something truly funny that is even better with friends. In Toot Raft the fun starts the moment you all try to steer one raft: someone shouts \"go left!\", someone else toots the wrong way, and everyone ends up laughing. It is a game about teamwork, timing and terrible pig manners."
 }

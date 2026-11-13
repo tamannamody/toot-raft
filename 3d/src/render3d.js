@@ -5,12 +5,16 @@
    ========================================================= */
 const canvas = document.getElementById('c');
 const OUTFITS = [
-  { shirt: '#ffffff', pants: '#3b6fd6', shoe: '#6b4226' }, // Pip: overalls
-  { shirt: '#e5484d', pants: '#e5484d', shoe: '#ffffff' }, // Ham: tracksuit
-  { shirt: '#ffd54a', pants: '#23395d', shoe: '#ff6b5a' }, // Bun: tee and shorts
-  { shirt: '#2ec4b6', pants: '#3a3a4a', shoe: '#f2efe6' }, // Lou: hoodie
+  { shirt: '#ffffff', pants: '#3b6fd6', shoe: '#6b4226' }, // blue pig: overalls
+  { shirt: '#e5484d', pants: '#e5484d', shoe: '#ffffff' }, // red pig: tracksuit
+  { shirt: '#ffd54a', pants: '#23395d', shoe: '#ff6b5a' }, // yellow pig: tee and shorts
+  { shirt: '#2ec4b6', pants: '#3a3a4a', shoe: '#f2efe6' }, // teal pig: hoodie
 ];
-function lookOf(i) { return (save.looks && save.looks[i]) || { hat: 'none', outfit: 'classic' }; }
+// Who sits where online: my seat, and the looks friends picked in their own wardrobes
+const seat = { me: 0, looks: [] };
+const PLAIN_LOOK = { hat: 'none', outfit: 'classic' };
+function myLook() { return (save.looks && save.looks[0]) || PLAIN_LOOK; }
+function lookOf(i) { return i === seat.me ? myLook() : seat.looks[i] || PLAIN_LOOK; }
 function outfitColors(i, id) {
   const skin = OUTFIT_SKINS.find(o => o.id === id);
   return skin && skin.c ? Object.assign({}, OUTFITS[i], skin.c) : OUTFITS[i];
@@ -500,7 +504,6 @@ const R3D = (() => {
     return canvasTex(64, 64, g => {
       g.fillStyle = RIDERS[i].dark; g.beginPath(); g.arc(32, 32, 30, 0, TAU); g.fill();
       g.fillStyle = RIDERS[i].color; g.beginPath(); g.arc(32, 32, 25, 0, TAU); g.fill();
-      g.fillStyle = '#1f2a44'; g.font = '900 38px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(RIDERS[i].key, 32, 34);
     });
   }
   const badgeTex = RIDERS.map((_, i) => badgeTexture(i));
@@ -515,21 +518,20 @@ const R3D = (() => {
       const pill = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fill(); };
       g.fillStyle = RIDERS[i].dark; pill(0, 2, W, H - 4, (H - 4) / 2);
       g.fillStyle = '#fffaf0'; pill(4, 6, W - 8, H - 12, (H - 12) / 2);
-      g.fillStyle = RIDERS[i].color; g.beginPath(); g.arc(32, 32, 24, 0, TAU); g.fill();
+      g.fillStyle = RIDERS[i].color; g.beginPath(); g.arc(32, 32, 20, 0, TAU); g.fill();
       g.fillStyle = '#1f2a44'; g.textBaseline = 'middle';
-      g.font = '900 32px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(RIDERS[i].key, 32, 34);
       g.font = font; g.textAlign = 'left'; g.fillText(name, H + 2, 34, W - H - 14);
     });
     tex.aspect = W / H;
     return tex;
   }
-  let badgeKey = '', named = false;
+  let badgeKey = '', named = false, tagsOn = true;   // tagsOn: off only for cover shots
   const tagPos = new THREE.Vector3();
   // Name tags are wide, so stack them: the further a pig is from the camera, the higher its tag
   function stackTags() {
     if (!named) return;
     const d = badgeSprites.map((sp, i) => { sp.getWorldPosition(tagPos); return { i, d: tagPos.distanceToSquared(camera.position) }; });
-    d.sort((a, b) => a.d - b.d).forEach((e, rank) => { badgeSprites[e.i].position.y = 56 + rank * 13; });
+    d.filter(e => badgeSprites[e.i].visible).sort((a, b) => a.d - b.d).forEach((e, rank) => { badgeSprites[e.i].position.y = 56 + rank * 13; });
   }
   function setBadges(labels) {
     const key = JSON.stringify(labels || []);
@@ -557,13 +559,11 @@ const R3D = (() => {
     }
     raft.add(m.mesh());
     RIDERS.forEach((R, i) => {
-      const holder = new THREE.Group(), a = i * Math.PI / 2;
-      holder.position.set(Math.cos(a) * RIDER_DIST, 3.5, Math.sin(a) * RIDER_DIST);
-      holder.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));   // bottom out, face in
-      const badge = new THREE.Sprite(badges[i]); badge.scale.set(19, 19, 1); badge.position.set(Math.cos(a) * RIDER_DIST, 56, Math.sin(a) * RIDER_DIST); badge.renderOrder = 20;
+      const holder = new THREE.Group();
+      const badge = new THREE.Sprite(badges[i]); badge.scale.set(19, 19, 1); badge.renderOrder = 20;
       badgeSprites[i] = badge;
       raft.add(holder, badge);
-      riderViews[i] = { holder, pig: null };
+      riderViews[i] = { holder, pig: null, last: null, run: 0 };
     });
   })();
   function refreshLooks() {
@@ -712,13 +712,24 @@ const R3D = (() => {
     raft.scale.setScalar(sc);
     raft.visible = !(G.invuln > 0 && !G.ending && Math.sin(t * 34) > 0.2);
     shadow.position.set(r.x, surfY(d, L.u) + 0.8, r.y); shadow.scale.setScalar(sc); shadow.visible = sc > 0.05;
+    const n = pigCount();
     r.riders.forEach((rd, i) => {
-      const p = riderViews[i].pig; if (!p) return;
+      const v = riderViews[i], p = v.pig, on = i < n;
+      v.holder.visible = on; badgeSprites[i].visible = on && tagsOn;
+      if (!p || !on) return;
+      // stand on the raft edge, bottom out, face in; hop while running round
+      const pa = rd.pos || 0, cx = Math.cos(pa), cz = Math.sin(pa);
+      v.run = v.last !== null && Math.abs(Math.atan2(Math.sin(pa - v.last), Math.cos(pa - v.last))) > 1e-3 ? 0.18 : Math.max(0, v.run - 1 / 60);
+      v.last = pa;
+      v.holder.position.set(cx * RIDER_DIST, 3.5, cz * RIDER_DIST);
+      v.holder.rotation.y = Math.atan2(-cx, -cz);
+      badgeSprites[i].position.x = cx * RIDER_DIST; badgeSprites[i].position.z = cz * RIDER_DIST;
       const a = clamp(rd.anim, 0, 1);
       p.rotation.x = a * 0.5;                                    // lean forward, bottom out
+      p.rotation.z = v.run > 0 ? Math.sin(t * 22) * 0.18 : 0;   // waddle while running
       p.scale.set(1.08 + a * 0.1, 1.14 * (1 - a * 0.12), 1.08 + a * 0.1);
       p.position.x = rd.fizz > 0 ? Math.sin(t * 60) * 0.8 : 0;
-      p.position.y = Math.sin(t * 3 + i * 1.7) * 0.4;
+      p.position.y = v.run > 0 ? Math.abs(Math.sin(t * 22)) * 3 : Math.sin(t * 3 + i * 1.7) * 0.4;
     });
   }
   function updateChunks(d) {
@@ -738,7 +749,7 @@ const R3D = (() => {
     const a = riderAngleSafe(i);
     return riderWorld.set(raftPos.x + Math.cos(a) * RIDER_DIST, raftPos.y + y, raftPos.z + Math.sin(a) * RIDER_DIST);
   }
-  function riderAngleSafe(i) { return G.raft.ang + i * Math.PI / 2; }
+  function riderAngleSafe(i) { return G.raft.ang + (G.raft.riders[i].pos || 0); }
   function updateOverlays() {
     const inRound = G.state === 'playing';
     const fl = inRound && G.flash ? G.flash.text : null;
@@ -785,7 +796,7 @@ const R3D = (() => {
   /* ---------- Input helpers: all relative to the camera ---------- */
   function pick(cx, cy) {
     let best = -1, bd = 40;
-    if (G.raft) for (let i = 0; i < 4; i++) {
+    if (G.raft) for (let i = 0; i < pigCount(); i++) {
       const s = project(riderPoint(i, 22)), dd = Math.hypot(s.x - cx, s.y - cy);
       if (dd < bd) { bd = dd; best = i; }
     }
@@ -802,5 +813,5 @@ const R3D = (() => {
   }
 
   function riderScreen(i) { return project(riderPoint(i, 22)); }
-  return { setBadges, riderScreen, buildLevel, render, resize, pick, keyDir, pushScreenAngle, pigPreview, refreshLooks, get quality() { return quality; }, get info() { return renderer ? renderer.info.render : null; } };
+  return { setBadges, setTags: on => { tagsOn = !!on; }, riderScreen, buildLevel, render, resize, pick, keyDir, pushScreenAngle, pigPreview, refreshLooks, get quality() { return quality; }, get info() { return renderer ? renderer.info.render : null; } };
 })();
