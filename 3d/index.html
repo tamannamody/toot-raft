@@ -142,7 +142,8 @@
   /* Play with friends */
   .link { background: #fff; border-radius: 12px; padding: 10px 12px; font: 700 13px ui-monospace, Menlo, monospace; word-break: break-all;
     -webkit-user-select: text; user-select: text; text-align: left; }
-  #menuNameBox { margin: 4px 0 2px; }
+  #menuNameBox { margin: 4px 0 2px; min-width: 0; }
+  #scrMenu .card, #scrMenu .logo { min-width: 0; max-width: 100%; }
   #menuNameBox input { padding: 7px 12px; }
   .namebox { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-weight: 900; font-size: 14px; text-align: left; white-space: nowrap; }
   .namebox input { flex: 1; min-width: 0; border: 3px solid rgba(31,42,68,.15); border-radius: 12px; padding: 9px 12px;
@@ -167,12 +168,17 @@
     h1 { font-size: 34px; }
   }
   /* Menu: the logo sits in the sky, the river shows in the middle, the buttons sit at the bottom */
-  #scrMenu { background: none; grid-template-rows: auto 1fr; place-items: stretch; padding: 14px 12px calc(env(safe-area-inset-bottom) + 14px); gap: 8px; }
+  #scrMenu { background: none; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); place-items: stretch; padding: 14px 12px calc(env(safe-area-inset-bottom) + 14px); gap: 8px; }
   #scrMenu .logo { text-align: center; padding-top: env(safe-area-inset-top); }
   #scrMenu h1 { font-size: clamp(44px, 14vw, 72px); font-weight: 900; color: #fff; -webkit-text-stroke: 8px #ff6b5a; paint-order: stroke fill; text-shadow: 0 5px 0 #c8383f; }
   #scrMenu .tag { display: table; margin: 8px auto 0; padding: 3px 12px; border-radius: 12px; background: rgba(255,250,240,.92); color: #1f2a44; opacity: 1; font-weight: 800; font-size: 14px; }
   #scrMenu .card { align-self: end; margin: 0 auto; padding: 8px 14px 12px; border-radius: 22px; }
-  #scrMenu .levels { margin-top: 12px; }
+  #scrMenu .levels { margin-top: 10px; gap: 6px; }
+  /* compact menu so it fits a phone even with wider fonts (Linux, Android) */
+  #scrMenu .btn { padding: 11px; margin-top: 8px; }
+  #scrMenu .lvl { padding: 6px 4px; }
+  #scrMenu .lvl b { font-size: 13px; }
+  #menuNameBox input { padding: 6px 12px; }
   .howto { margin-top: 10px; font-size: 14px; }
   .howto summary { font-weight: 800; opacity: .7; cursor: pointer; padding: 2px; }
   .howto .how { margin: 8px 0; }
